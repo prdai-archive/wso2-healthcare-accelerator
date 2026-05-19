@@ -34,6 +34,19 @@ service / on httpListener {
         string? sessionDataKeyConsent = extractSessionDataKeyConsent(reqBody.event);
         log:printDebug(string `[${flowId}] extracted values`, grantType = grantType, tokenScopes = (tokenScopes ?: []).toString(), sessionDataKeyConsent = sessionDataKeyConsent ?: "(none)");
 
+        // ── 0. Drop scopes not permitted for the current grant type ───────────
+        log:printInfo(string `[${flowId}] Filtering scopes for grant type '${grantType}'`);
+        string[] permittedTokenScopes = [];
+            foreach string s in tokenScopes {
+                if s.matches(scopeRegex) && !isPermittedScope(s, grantType) {
+                    log:printWarn(string `[${flowId}]: Scope '${s}' not permitted for grant '${grantType}' — dropped early`);
+                    continue;
+                }
+                permittedTokenScopes.push(s);
+            }
+        }
+        string[]? filteredTokenScopes = permittedTokenScopes.length() > 0 ? permittedTokenScopes : ();
+
         // ── 1. Load approved scopes from OpenFGC ─────────────────────────────
         string[] approvedScopes = [];
         string? resolvedConsentId = ();
@@ -91,32 +104,41 @@ service / on httpListener {
         }
 
         // ── 3. Validate and expand requested token scopes ─────────────────────
-        if tokenScopes is string[] {
-            foreach string scope in tokenScopes {
-                if !isAlwaysAllowedScope(scope) && !isScopeApproved(scope, approvedScopes) {
-                    log:printWarn(string `[${flowId}]: Scope '${scope}' not in approved set — skipped`);
-                    continue;
-                }
-
+        // Consent approval check only applies when a consent record was resolved.
+        // For client_credentials (no sessionDataKeyConsent) scope filtering is
+        // handled entirely by the grant-type check in step 0.
+        boolean hasConsent = sessionDataKeyConsent is string && sessionDataKeyConsent != "" && resolvedConsentId is string;
+        log:printInfo(string `[${flowId}] Processing scopes with consent check: ${hasConsent}`);
+        if filteredTokenScopes is string[] {
+            foreach string scope in filteredTokenScopes {
                 if scope.matches(scopeRegex) {
-                    if !isPermittedScope(scope, grantType) {
-                        log:printWarn(string `[${flowId}]: Scope '${scope}' not permitted for grant '${grantType}' — skipped`);
-                        continue;
-                    }
-                    // Expand multi-character operations (e.g. cruds → c, r, u, d, s)
+                    // Expand multi-character operations first, then check each expanded scope
                     string[] parts = re `\.`.split(scope);
                     if parts.length() == 2 {
                         string resourceStr = parts[0];
                         string opsStr = parts[1];
                         if opsStr.length() > 1 {
                             foreach int i in 0 ..< opsStr.length() {
-                                modifiedScopes.push(resourceStr + "." + opsStr.substring(i, i + 1));
+                                string expanded = resourceStr + "." + opsStr.substring(i, i + 1);
+                                if hasConsent && !isAlwaysAllowedScope(expanded) && !isScopeApproved(expanded, approvedScopes) {
+                                    log:printWarn(string `[${flowId}]: Expanded scope '${expanded}' not in approved set — skipped`);
+                                    continue;
+                                }
+                                modifiedScopes.push(expanded);
                             }
                         } else {
+                            if hasConsent && !isAlwaysAllowedScope(scope) && !isScopeApproved(scope, approvedScopes) {
+                                log:printWarn(string `[${flowId}]: Scope '${scope}' not in approved set — skipped`);
+                                continue;
+                            }
                             modifiedScopes.push(scope);
                         }
                     }
                 } else if !scope.matches(re `^(patient|user|system)/.*`) {
+                    if hasConsent && !isAlwaysAllowedScope(scope) && !isScopeApproved(scope, approvedScopes) {
+                        log:printWarn(string `[${flowId}]: Scope '${scope}' not in approved set — skipped`);
+                        continue;
+                    }
                     modifiedScopes.push(scope);
                 } else {
                     log:printWarn(string `[${flowId}]: Scope '${scope}' has invalid SMART format — skipped`);
@@ -129,7 +151,7 @@ service / on httpListener {
         // ── 4. Build patch operations ─────────────────────────────────────────
         (addOperationResponse|replaceOperationResponse|removeOperationResponse)[] ops = [];
 
-        // Remove existing scopes from token (reverse-index order)
+        // Remove existing scopes from token (reverse-index order, using original list)
         if tokenScopes is string[] && tokenScopes.length() > 0 {
             foreach int i in 0 ..< tokenScopes.length() {
                 int idx = (tokenScopes.length() - 1) - i;
