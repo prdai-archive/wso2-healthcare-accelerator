@@ -48,17 +48,18 @@ jobs:
       - name: Print ZIP file path
         run: echo "ZIP file created at ${{ steps.locate_zip.outputs.zipfile }}"
 
-      # Tag the commit with the extracted version so the release is traceable
+      # Tag the commit with the extracted version so the release is traceable.
+      # If the tag already exists on origin, reuse it and continue the workflow.
       - name: Create Tag
         id: create_tag
         run: |
           TAG="v${{ steps.extract_version.outputs.version }}"
           if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
-            echo "Tag ${TAG} already exists on origin" >&2
-            exit 1
+            echo "Tag ${TAG} already exists on origin, reusing it"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
           fi
-          git tag $TAG
-          git push origin $TAG
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       # Create a GitHub Pre-Release for the IS accelerator
