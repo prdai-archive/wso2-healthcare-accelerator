@@ -234,6 +234,8 @@ public class ConformanceMediator extends AbstractMediator {
 
         //iterate for all APIs
         for (API api : allMatchedApis) {
+            LOG.debug(String.format("Processing API: %s version: %s for capability statement",
+                    api.getId().getName(), api.getId().getVersion()));
             String apiDefinitionContent;
             OASHandler handler = null;
             apiDefinitionContent = api.getSwaggerDefinition();
@@ -245,6 +247,8 @@ public class ConformanceMediator extends AbstractMediator {
             }
 
             if (handler != null) {
+                LOG.debug(String.format("Successfully initialized %s handler for API: %s",
+                        swaggerVersion, api.getId().getName()));
                 Map<String, Object> extensions = handler.getVendorExtentions();
                 if (extensions == null) {
                     continue;

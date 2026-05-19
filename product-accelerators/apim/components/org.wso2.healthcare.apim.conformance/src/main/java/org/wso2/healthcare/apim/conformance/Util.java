@@ -293,6 +293,7 @@ public class Util {
      */
     public static SwaggerVersion getSwaggerVersion(String apiDefinition) {
         if (apiDefinition == null || apiDefinition.isEmpty()) {
+            LOG.debug("API definition is null or empty, returning UNKNOWN version");
             return SwaggerVersion.UNKNOWN;
         }
         try {
@@ -302,9 +303,11 @@ public class Util {
             }
             JsonObject obj = root.getAsJsonObject();
             if (obj.has("swagger")) {
+                LOG.debug("Detected OAS 2 (Swagger) API definition");
                 return SwaggerVersion.SWAGGER;
             }
             if (obj.has("openapi")) {
+                LOG.debug("Detected OAS 3 (OpenAPI) API definition");
                 return SwaggerVersion.OPEN_API;
             }
         } catch (Exception e) {
