@@ -311,7 +311,16 @@ public class Util {
                 return SwaggerVersion.OPEN_API;
             }
         } catch (Exception e) {
+            // Fallback for YAML definitions
+            String normalized = apiDefinition.trim();
+            if (normalized.startsWith("swagger:")) {
+                return SwaggerVersion.SWAGGER;
+            }
+            if (normalized.startsWith("openapi:")) {
+                return SwaggerVersion.OPEN_API;
+            }
             LOG.warn("Failed to parse API definition to determine OAS version", e);
+
         }
         return SwaggerVersion.UNKNOWN;
     }
