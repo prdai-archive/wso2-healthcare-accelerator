@@ -20,6 +20,7 @@ package org.wso2.healthcare.apim.conformance;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.commons.lang.StringUtils;
@@ -265,6 +266,51 @@ public class Util {
             throw new ConformanceMediatorException("Error occurred while calling key manager well-known endpoint", e);
         }
         return wellKnownResponse;
+    }
+
+    /**
+     * Swagger/OpenAPI spec version, used to select the appropriate OAS handler.
+     */
+    public enum SwaggerVersion {
+        SWAGGER,   // OAS 2 — top-level "swagger" key
+        OPEN_API,  // OAS 3 — top-level "openapi" key
+        UNKNOWN
+    }
+
+    /**
+     * Determine the OAS version of an API definition string without relying on
+     * the deprecated {@code OASParserUtil.getSwaggerVersion()} from apimgt.
+     *
+     * <p>Detection rules:
+     * <ul>
+     *   <li>Presence of a top-level {@code "swagger"} key → {@link SwaggerVersion#SWAGGER} (OAS 2)</li>
+     *   <li>Presence of a top-level {@code "openapi"} key → {@link SwaggerVersion#OPEN_API} (OAS 3)</li>
+     *   <li>Anything else or a parse error → {@link SwaggerVersion#UNKNOWN}</li>
+     * </ul>
+     *
+     * @param apiDefinition raw JSON string of the API definition
+     * @return detected {@link SwaggerVersion}
+     */
+    public static SwaggerVersion getSwaggerVersion(String apiDefinition) {
+        if (apiDefinition == null || apiDefinition.isEmpty()) {
+            return SwaggerVersion.UNKNOWN;
+        }
+        try {
+            JsonElement root = JsonParser.parseString(apiDefinition);
+            if (!root.isJsonObject()) {
+                return SwaggerVersion.UNKNOWN;
+            }
+            JsonObject obj = root.getAsJsonObject();
+            if (obj.has("swagger")) {
+                return SwaggerVersion.SWAGGER;
+            }
+            if (obj.has("openapi")) {
+                return SwaggerVersion.OPEN_API;
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to parse API definition to determine OAS version", e);
+        }
+        return SwaggerVersion.UNKNOWN;
     }
 
     /**

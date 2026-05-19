@@ -18,7 +18,6 @@
 
 package org.wso2.healthcare.apim.conformance;
 
-import com.google.gson.JsonObject;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.util.AXIOMUtil;
 import org.apache.axis2.AxisFault;
@@ -39,14 +38,12 @@ import org.wso2.carbon.apimgt.api.model.API;
 import org.wso2.carbon.apimgt.api.model.URITemplate;
 import org.wso2.carbon.apimgt.impl.APIConstants;
 import org.wso2.carbon.apimgt.impl.APIManagerFactory;
-import org.wso2.carbon.apimgt.impl.definitions.OASParserUtil;
 import org.wso2.carbon.governance.api.util.GovernanceArtifactConfiguration;
 import org.wso2.carbon.governance.api.util.GovernanceUtils;
 import org.wso2.carbon.registry.core.Registry;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.session.UserRegistry;
 import org.wso2.carbon.user.api.UserStoreException;
-import org.wso2.healthcare.apim.conformance.internal.ConformanceDataHolder;
 import org.wso2.healthcare.apim.core.OpenHealthcareException;
 import org.wso2.healthcare.apim.core.api.server.FHIRServerConfigAPI;
 
@@ -239,18 +236,12 @@ public class ConformanceMediator extends AbstractMediator {
         for (API api : allMatchedApis) {
             String apiDefinitionContent;
             OASHandler handler = null;
-            try {
-                apiDefinitionContent = api.getSwaggerDefinition();
-                if (OASParserUtil.SwaggerVersion.SWAGGER.equals(OASParserUtil.getSwaggerVersion(
-                        apiDefinitionContent))) {
-                    handler = new OAS2Handler(apiDefinitionContent);
-                } else if (OASParserUtil.SwaggerVersion.OPEN_API
-                        .equals(OASParserUtil.getSwaggerVersion(apiDefinitionContent))) {
-                    handler = new OAS3Handler(apiDefinitionContent);
-                }
-            } catch (APIManagementException e) {
-                LOG.error("Error occurred while retrieving OpenAPI definition", e);
-                throw new ConformanceMediatorException("Error occurred while retrieving OpenAPI definition", e);
+            apiDefinitionContent = api.getSwaggerDefinition();
+            Util.SwaggerVersion swaggerVersion = Util.getSwaggerVersion(apiDefinitionContent);
+            if (Util.SwaggerVersion.SWAGGER.equals(swaggerVersion)) {
+                handler = new OAS2Handler(apiDefinitionContent);
+            } else if (Util.SwaggerVersion.OPEN_API.equals(swaggerVersion)) {
+                handler = new OAS3Handler(apiDefinitionContent);
             }
 
             if (handler != null) {
