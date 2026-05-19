@@ -1,0 +1,102 @@
+name: accelerator-release-build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # Extract the version from the root pom.xml — both accelerators share
+      # the same version, so this single value is reused for the tag, release
+      # name, and both asset filenames.
+      - name: Extract version from pom.xml
+        id: extract_version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "Project version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Build the full project so both distribution ZIPs are produced in one pass
+      - name: Build with Maven
+        run: mvn clean install
+
+      # Locate the APIM accelerator ZIP under its distribution module target dir
+      - name: Locate APIM accelerator ZIP
+        id: locate_apim_zip
+        run: |
+          ZIPFILE=$(find ./distribution/apim-accelerator/target -maxdepth 1 -name '*.zip' | head -n 1)
+          echo "APIM ZIP: $ZIPFILE"
+          echo "zipfile=$ZIPFILE" >> "$GITHUB_OUTPUT"
+
+      # Locate the IS accelerator ZIP under its distribution module target dir
+      - name: Locate IS accelerator ZIP
+        id: locate_is_zip
+        run: |
+          ZIPFILE=$(find ./distribution/is-accelerator/target -maxdepth 1 -name '*.zip' | head -n 1)
+          echo "IS ZIP: $ZIPFILE"
+          echo "zipfile=$ZIPFILE" >> "$GITHUB_OUTPUT"
+
+      # Print both ZIP paths as a debug step to confirm both artifacts were created
+      - name: Print ZIP file paths
+        run: |
+          echo "APIM ZIP: ${{ steps.locate_apim_zip.outputs.zipfile }}"
+          echo "IS ZIP:   ${{ steps.locate_is_zip.outputs.zipfile }}"
+
+      # Create a single shared tag for both accelerators. If the tag already
+      # exists on origin (e.g. a re-run), reuse it and continue.
+      - name: Create Tag
+        id: create_tag
+        run: |
+          TAG="v${{ steps.extract_version.outputs.version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+            echo "Tag ${TAG} already exists on origin, reusing it"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      # Create a single Pre-Release that will hold both accelerator ZIPs
+      - name: Create Pre-Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.create_tag.outputs.tag }}
+          release_name: "Healthcare Accelerator - ${{ steps.create_tag.outputs.tag }}"
+          draft: false
+          prerelease: true
+
+      # Upload the APIM accelerator ZIP to the shared Pre-Release
+      - name: Upload APIM accelerator ZIP
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate_apim_zip.outputs.zipfile }}
+          asset_name: "wso2-hcam-accelerator-${{ steps.extract_version.outputs.version }}.zip"
+          asset_content_type: application/zip
+
+      # Upload the IS accelerator ZIP to the same Pre-Release
+      - name: Upload IS accelerator ZIP
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate_is_zip.outputs.zipfile }}
+          asset_name: "wso2-hcis-accelerator-${{ steps.extract_version.outputs.version }}.zip"
+          asset_content_type: application/zip
