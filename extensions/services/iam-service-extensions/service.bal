@@ -222,6 +222,91 @@ service / on httpListener {
         return <InlineResponse200Ok>{body: {actionStatus: "SUCCESS", operations: ops}};
     }
 
+    # SMART-aware introspect proxy: forwards to IS introspect and enriches the response
+    # with patient/encounter claims and fhirUser (when openid scope is present).
+    # + return - json|http:InternalServerError
+    isolated resource function post introspect(@http:Query string token, http:Request req)
+            returns http:Response|http:Unauthorized|http:InternalServerError {
+
+        string|http:HeaderNotFoundError authHeaderResult = req.getHeader("Authorization");
+        if authHeaderResult is http:HeaderNotFoundError {
+            return <http:Unauthorized>{body: {message: "Missing Authorization header"}};
+        }
+        string authHeader = authHeaderResult;
+
+        http:Response|error introspectResult = callIsIntrospect(token, authHeader);
+        if introspectResult is error {
+            log:printError("[Introspect] IS introspect call failed", 'error = introspectResult);
+            return <http:InternalServerError>{body: {message: introspectResult.message()}};
+        }
+        json|error payloadResult = introspectResult.getJsonPayload();
+        if payloadResult is error || !(payloadResult is map<json>) {
+            return <http:InternalServerError>{body: {message: "Invalid introspect response"}};
+        }
+        map<json> resp = payloadResult;
+
+        if introspectResult.statusCode < 200 || introspectResult.statusCode >= 300 {
+            log:printError("[Introspect] IS introspect returned error status", statusCode = introspectResult.statusCode, body = resp.toJsonString());
+            http:Response errResp = new;
+            errResp.statusCode = introspectResult.statusCode;
+            errResp.setJsonPayload(resp.toJson());
+            return errResp;
+        }
+
+        // If token is inactive return as-is
+        json active = resp["active"] ?: false;
+        if active != true {
+            http:Response inactiveResp = new;
+            inactiveResp.statusCode = 200;
+            inactiveResp.setJsonPayload(resp.toJson());
+            return inactiveResp;
+        }
+
+        // Extract scope string and split into individual scopes
+        json scopeJson = resp["scope"] ?: "";
+        string scopeStr = scopeJson is string ? scopeJson : "";
+        string[] scopes = re ` `.split(scopeStr);
+
+        // Add fhirUser (openid) and/or patient (launch/patient) claims via SCIM
+        boolean hasOpenid = false;
+        boolean hasLaunchPatient = false;
+        foreach string s in scopes {
+            if s == "openid" { hasOpenid = true; }
+            if s == "launch/patient" { hasLaunchPatient = true; }
+        }
+
+        if hasOpenid || hasLaunchPatient {
+            json subJson = resp["sub"] ?: "";
+            string userId = subJson is string ? subJson : "";
+            if userId != "" {
+                json|error scimUser = fetchScimUser(userId);
+                if scimUser is map<json> {
+                    string? fhirUser = getFhirUserFromScim(scimUser);
+                    if fhirUser is string && fhirUser != "" {
+                        if hasOpenid {
+                            resp["fhirUser"] = fhirUser;
+                            log:printDebug("[Introspect] Added fhirUser claim", fhirUser = fhirUser);
+                        }
+                        if hasLaunchPatient {
+                            string? patientId = getPatientIdFromFhirUser(fhirUser);
+                            if patientId is string && patientId != "" {
+                                resp["patient"] = patientId;
+                                log:printDebug("[Introspect] Added patient claim from fhirUser", patientId = patientId);
+                            }
+                        }
+                    }
+                } else if scimUser is error {
+                    log:printWarn("[Introspect] SCIM lookup failed", 'error = scimUser);
+                }
+            }
+        }
+
+        http:Response okResp = new;
+        okResp.statusCode = 200;
+        okResp.setJsonPayload(resp.toJson());
+        return okResp;
+    }
+
     # Adds fhirUser as an ID token claim when the fhirUser scope is requested.
     # + return - InlineResponse200Ok|ErrorResponseBadRequest|ErrorResponseInternalServerError
     isolated resource function post pre\-issue\-id\-token(@http:Payload json payload)

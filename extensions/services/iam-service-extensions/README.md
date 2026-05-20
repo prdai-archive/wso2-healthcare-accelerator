@@ -62,9 +62,9 @@ bal run
 | Key | Default | Description |
 |-----|---------|-------------|
 | `ehrContextResolveUrl` | `""` | EHR launch context endpoint; skipped when blank |
-| `scimApiBaseUrl` | `""` | SCIM base URL; SCIM lookup skipped when blank |
+| `isBaseUrl` | `""` | IS base URL |
 | `scimClientId` / `scimClientSecret` | `""` | OAuth2 credentials for SCIM token |
-| `scimTokenEndpoint` | `""` | Defaults to `{scimApiBaseUrl}/oauth2/token` |
+| `scimTokenEndpoint` | `""` | Defaults to `{isBaseUrl}/oauth2/token` |
 | `scimPatientGroupName` | `"patient"` | Group name used to identify patient users |
 | `fhirUserAttributeName` | `"fhirUser"` | SCIM custom attribute holding the FHIR user reference |
 | `alwaysAllowedScopes` | `["openid"]` | Scopes that bypass consent checks |
@@ -81,7 +81,7 @@ tppClientId = "<tpp-client-id>"
 
 ehrContextResolveUrl = "https://ehr.example.com/launch-context"
 
-scimApiBaseUrl = "https://api.asgardeo.io/t/<tenant>"
+isBaseUrl = "https://api.asgardeo.io/t/<tenant>"
 scimClientId = "<client-id>"
 scimClientSecret = "<client-secret>"
 
