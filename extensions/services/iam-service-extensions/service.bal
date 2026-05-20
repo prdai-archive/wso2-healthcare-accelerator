@@ -15,7 +15,17 @@
 import ballerina/http;
 import ballerina/log;
 
-listener http:Listener httpListener = new (port, config = {host: hostname});
+final http:ListenerConfiguration listenerConfig = keystorePath != "" ? {
+    host: hostname,
+    secureSocket: {
+        key: {
+            path: keystorePath,
+            password: keystorePassword
+        }
+    }
+} : {host: hostname};
+
+listener http:Listener httpListener = new (port, config = listenerConfig);
 
 final string:RegExp scopeRegex = re `^(patient|user|system)/(\*|[A-Za-z]*)\.(cruds|c?r?u?d?s?)$`;
 
@@ -197,7 +207,7 @@ service / on httpListener {
                     if isPatientGroupMember(scimUser) {
                         string? fhirUser = getFhirUserFromScim(scimUser);
                         if fhirUser is string {
-                            resolvedPatientId = getPatientIdFromFhirUser(fhirUser);
+                            resolvedPatientId = getPatientIdFromFhirUser(scimUser);
                         }
                     }
                 } else if scimUser is error {
@@ -225,8 +235,8 @@ service / on httpListener {
     # SMART-aware introspect proxy: forwards to IS introspect and enriches the response
     # with patient/encounter claims and fhirUser (when openid scope is present).
     # + return - json|http:InternalServerError
-    isolated resource function post introspect(@http:Query string token, http:Request req)
-            returns http:Response|http:Unauthorized|http:InternalServerError {
+    isolated resource function post introspect(@http:Query string? token, http:Request req)
+            returns http:Response|http:Unauthorized|http:BadRequest|http:InternalServerError {
 
         string|http:HeaderNotFoundError authHeaderResult = req.getHeader("Authorization");
         if authHeaderResult is http:HeaderNotFoundError {
@@ -234,7 +244,34 @@ service / on httpListener {
         }
         string authHeader = authHeaderResult;
 
-        http:Response|error introspectResult = callIsIntrospect(token, authHeader);
+        // Token may arrive as a query param or in the form body (RFC 7662)
+        string resolvedToken;
+        if token is string && token != "" {
+            resolvedToken = token;
+        } else {
+            string|error bodyText = req.getTextPayload();
+            if bodyText is error {
+                return <http:BadRequest>{body: {message: "Missing token"}};
+            }
+            string? bodyToken = ();
+            foreach string part in re `&`.split(bodyText) {
+                int? eqIdx = part.indexOf("=");
+                if eqIdx is int {
+                    string key = part.substring(0, eqIdx).trim();
+                    string val = part.substring(eqIdx + 1).trim();
+                    if key == "token" {
+                        bodyToken = val;
+                        break;
+                    }
+                }
+            }
+            if !(bodyToken is string) || bodyToken == "" {
+                return <http:BadRequest>{body: {message: "Missing token"}};
+            }
+            resolvedToken = bodyToken;
+        }
+
+        http:Response|error introspectResult = callIsIntrospect(resolvedToken, authHeader);
         if introspectResult is error {
             log:printError("[Introspect] IS introspect call failed", 'error = introspectResult);
             return <http:InternalServerError>{body: {message: introspectResult.message()}};
@@ -288,7 +325,7 @@ service / on httpListener {
                             log:printDebug("[Introspect] Added fhirUser claim", fhirUser = fhirUser);
                         }
                         if hasLaunchPatient {
-                            string? patientId = getPatientIdFromFhirUser(fhirUser);
+                            string? patientId = getPatientIdFromFhirUser(scimUser);
                             if patientId is string && patientId != "" {
                                 resp["patient"] = patientId;
                                 log:printDebug("[Introspect] Added patient claim from fhirUser", patientId = patientId);
@@ -391,6 +428,24 @@ isolated function getFhirUserFromScim(map<json> scimUser) returns string? {
         json fhirUser = wso2Schema[fhirUserAttributeName] ?: "";
         if fhirUser is string && fhirUser != "" {
             return fhirUser;
+        }
+    }
+    return ();
+}
+
+isolated function getPatientIdFromFhirUser(map<json> scimUser) returns string? {
+    json customSchema = scimUser["urn:scim:schemas:extension:custom:User"] ?: {};
+    if customSchema is map<json> {
+        json patient = customSchema[patientAttributeName] ?: "";
+        if patient is string && patient != "" {
+            return patient;
+        }
+    }
+    json wso2Schema = scimUser["urn:scim:wso2:schema"] ?: {};
+    if wso2Schema is map<json> {
+        json patient = wso2Schema[patientAttributeName] ?: "";
+        if patient is string && patient != "" {
+            return patient;
         }
     }
     return ();
