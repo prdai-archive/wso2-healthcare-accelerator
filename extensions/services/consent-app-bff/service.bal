@@ -405,6 +405,7 @@ service / on consentBffListener {
                     continue;
                 }
                 if s.startsWith("OH_") || s.startsWith("launch") || s == "fhirUser" {
+                    log.debug("Hiding scope: " + s);
                     hiddenScopes.push(s);
                     continue;
                 }

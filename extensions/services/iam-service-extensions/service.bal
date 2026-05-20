@@ -45,8 +45,8 @@ service / on httpListener {
         log:printDebug(string `[${flowId}] extracted values`, grantType = grantType, tokenScopes = (tokenScopes ?: []).toString(), sessionDataKeyConsent = sessionDataKeyConsent ?: "(none)");
 
         // ── 0. Drop scopes not permitted for the current grant type ───────────
+        log:printInfo(string `[${flowId}] Filtering scopes for grant type '${grantType}'`);
         string[] permittedTokenScopes = [];
-        if tokenScopes is string[] {
             foreach string s in tokenScopes {
                 if s.matches(scopeRegex) && !isPermittedScope(s, grantType) {
                     log:printWarn(string `[${flowId}]: Scope '${s}' not permitted for grant '${grantType}' — dropped early`);
@@ -118,6 +118,7 @@ service / on httpListener {
         // For client_credentials (no sessionDataKeyConsent) scope filtering is
         // handled entirely by the grant-type check in step 0.
         boolean hasConsent = sessionDataKeyConsent is string && sessionDataKeyConsent != "" && resolvedConsentId is string;
+        log:printInfo(string `[${flowId}] Processing scopes with consent check: ${hasConsent}`);
         if filteredTokenScopes is string[] {
             foreach string scope in filteredTokenScopes {
                 if scope.matches(scopeRegex) {
