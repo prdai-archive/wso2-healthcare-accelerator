@@ -36,8 +36,8 @@ jobs:
         id: locate_apim_zip
         run: |
           mapfile -t ZIPS < <(find ./distribution/apim-accelerator/target -maxdepth 1 -type f -name '*.zip' | sort)
-          if [ "${`#ZIPS`[@]}" -ne 1 ]; then
-            echo "Expected exactly 1 APIM ZIP, found ${`#ZIPS`[@]}"
+          if [[ "${#ZIPS[@]}" -ne 1 ]]; then
+            echo "Expected exactly 1 APIM ZIP, found ${#ZIPS[@]}"
             printf '%s\n' "${ZIPS[@]}"
             exit 1
           fi
@@ -50,8 +50,8 @@ jobs:
         id: locate_is_zip
         run: |
           mapfile -t ZIPS < <(find ./distribution/is-accelerator/target -maxdepth 1 -type f -name '*.zip' | sort)
-          if [ "${`#ZIPS`[@]}" -ne 1 ]; then
-            echo "Expected exactly 1 IS ZIP, found ${`#ZIPS`[@]}"
+          if [[ "${#ZIPS[@]}" -ne 1 ]]; then
+            echo "Expected exactly 1 IS ZIP, found ${#ZIPS[@]}"
             printf '%s\n' "${ZIPS[@]}"
             exit 1
           fi
