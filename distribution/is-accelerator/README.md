@@ -77,7 +77,7 @@ authorize_all_scopes = true
 allowed_scopes = ["^(patient|user|system)/.*", "^OH_.*", "fhirUser", "launch", "launch/patient", "launch/encounter", "offline_access"]
 
 [oauth.endpoints.v2]
-oidc_consent_page = "http://localhost:9091/consent"
+oidc_consent_page = "http://localhost:9091/open-healthcare/consent"
 
 [oauth.grant_type.authorization_code]
 grant_handler = "org.wso2.healthcare.is.tokenmgt.handlers.HealthcareAuthorizationCodeGrantHandler"

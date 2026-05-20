@@ -128,6 +128,7 @@ type SubmitConsentRequest record {|
     string[] hiddenScopes?;
     ConsentedPurpose[] consentedPurposes?;
     string existingConsentId?;
+    string consentExpiryOption?;
 |};
 
 type SubmitConsentResponse record {|
@@ -168,6 +169,7 @@ type ScimUserInfo record {|
 
 type ExistingConsentData record {|
     string consentId;
+    int validityTime?;
     string[] approvedScopes;           // scope flow
     string[] consentedPurposeNames;    // purpose flow
     map<string[]> consentedElements;   // purpose flow
@@ -202,6 +204,7 @@ type OpenFGCConsentCreatePayload record {|
     string 'type;
     OpenFGCConsentPurposeItem[] purposes;
     OpenFGCAuthorization[] authorizations;
+    int validityTime?;
     map<string> attributes?;
 |};
 
@@ -239,6 +242,7 @@ type OpenFGCSearchAuthorization record {
 
 type OpenFGCSearchRecord record {
     string id;
+    int validityTime?;
     OpenFGCSearchPurpose[] purposes?;
     OpenFGCSearchAuthorization[] authorizations?;
 };

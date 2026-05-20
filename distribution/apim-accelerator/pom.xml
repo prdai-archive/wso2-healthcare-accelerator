@@ -158,9 +158,11 @@
                                         <include name="org.wso2.healthcare.apim.gateway.security.jwt.generator-${project.version}.jar"/>
                                     </fileset>
                                     <!--PKJWT Backend Auth Handler-->
-                                    <fileset dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.backendauth/target">
-                                        <include name="org.wso2.healthcare.apim.backendauth-${project.version}.jar"/>
-                                    </fileset>
+<!--                                    PKJWT Backend Auth Handler is removed from the accelerator since IS-7.X.X ships with PKJWT support-->
+
+<!--                                    <fileset dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.backendauth/target">-->
+<!--                                        <include name="org.wso2.healthcare.apim.backendauth-${project.version}.jar"/>-->
+<!--                                    </fileset>-->
                                 </copy>
 
                                 <!--Add Bundles to lib-->

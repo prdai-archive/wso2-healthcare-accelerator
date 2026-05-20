@@ -119,8 +119,8 @@ fi
 
 # adding the consent webapp
 echo -e "[INFO] Deploying consent webapp.."
-mkdir -p "${WSO2_OH_IS_HOME}"/repository/deployment/server/webapps/consent
-cp -R "${ACCELERATOR_HOME}"/carbon-home/repository/deployment/server/webapps/consent/* "${WSO2_OH_IS_HOME}"/repository/deployment/server/webapps/consent
+mkdir -p "${WSO2_OH_IS_HOME}"/repository/deployment/server/webapps/open-healthcare
+cp -R "${ACCELERATOR_HOME}"/carbon-home/repository/deployment/server/webapps/open-healthcare/* "${WSO2_OH_IS_HOME}"/repository/deployment/server/webapps/open-healthcare
 
 # adding configurations to deployment.toml file
 echo -e "[INFO] Adding configurations to deployment.toml file"
@@ -155,7 +155,7 @@ if [ "${enable_smart_on_fhir}" == "true" ]; then
       echo -e "[WARN] oauth.endpoints.v2 configuration already exist"
   else
       # code if not found
-      echo -e "\n[oauth.endpoints.v2]\noidc_consent_page=\"http://localhost:9091/consent\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
+      echo -e "\n[oauth.endpoints.v2]\noidc_consent_page=\"http://localhost:9091/open-healthcare/consent\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
   fi
 
   if grep -Fxq "[oauth.grant_type.authorization_code]" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
@@ -177,12 +177,12 @@ if [ "${enable_smart_on_fhir}" == "true" ]; then
   fi
 
   J2_FILE="${WSO2_OH_IS_HOME}/repository/resources/conf/templates/repository/conf/identity/resource-access-control-v2.xml.j2"
-  if grep -Fq 'context="(.*)/consent(.*)"' "${J2_FILE}"
+  if grep -Fq 'context="(.*)/open-healthcare(.*)"' "${J2_FILE}"
   then
-      echo -e "[WARN] resource-access-control-v2.xml.j2 already patched for consent"
+      echo -e "[WARN] resource-access-control-v2.xml.j2 already patched for consent webapp"
   else
-      sed -i.bak 's|<Resource context="(.*)/console(.*)" secured="false" http-method="all"/>|<Resource context="(.*)/console(.*)" secured="false" http-method="all"/>\n        <Resource context="(.*)/consent(.*)" secured="false" http-method="all"/>|' "${J2_FILE}"
-      echo -e "[INFO] Patched resource-access-control-v2.xml.j2 for consent"
+      sed -i.bak 's|<Resource context="(.*)/console(.*)" secured="false" http-method="all"/>|<Resource context="(.*)/console(.*)" secured="false" http-method="all"/>\n        <Resource context="(.*)/open-healthcare(.*)" secured="false" http-method="all"/>|' "${J2_FILE}"
+      echo -e "[INFO] Patched resource-access-control-v2.xml.j2 for consent webapp"
   fi
 
   if grep -Fq "name = \"org.wso2.is.notification.ApimOauthEventInterceptor\"" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml

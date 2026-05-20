@@ -257,7 +257,7 @@ isolated function getExistingConsent(string userId, string effectiveFlow) return
                 }
             }
         }
-        return {consentId, approvedScopes, consentedPurposeNames: [], consentedElements: {}};
+        return {consentId, validityTime: existing.validityTime, approvedScopes, consentedPurposeNames: [], consentedElements: {}};
     }
 
     // Purpose flow: extract previously consented purposes and elements
@@ -309,7 +309,7 @@ isolated function getExistingConsent(string userId, string effectiveFlow) return
         }
     }
 
-    return {consentId, approvedScopes: [], consentedPurposeNames, consentedElements};
+    return {consentId, validityTime: existing.validityTime, approvedScopes: [], consentedPurposeNames, consentedElements};
 }
 
 @http:ServiceConfig {
@@ -405,7 +405,7 @@ service / on consentBffListener {
                     continue;
                 }
                 if s.startsWith("OH_") || s.startsWith("launch") || s == "fhirUser" {
-                    log.debug("Hiding scope: " + s);
+                    log:printDebug("Hiding scope: " + s);
                     hiddenScopes.push(s);
                     continue;
                 }
@@ -585,6 +585,16 @@ service / on consentBffListener {
 
         if approvedScopes != () || hiddenScopes != () {
             // Scope flow: store all approved + hidden scopes in authorizations[].resources.scopes
+            int? scopeValidityTime = ();
+            string? expiryOpt = submission.consentExpiryOption;
+            if expiryOpt == "24h" {
+                scopeValidityTime = 86400;
+            } else if expiryOpt == "3months" {
+                scopeValidityTime = 7776000;
+            } else if expiryOpt != "never" {
+                scopeValidityTime = scopeConsentValidityTime;
+            }
+
             string[] scopesToStore = [];
             if approvedScopes != () {
                 foreach string s in approvedScopes {
@@ -640,6 +650,7 @@ service / on consentBffListener {
                     status: "APPROVED",
                     resources: {spId: submission.spId, application: trustedApp, scopes: scopesToStore}
                 }],
+                validityTime: scopeValidityTime,
                 attributes: {"sessionDataKeyConsent": submission.sessionDataKeyConsent}
             };
 
@@ -732,6 +743,7 @@ service / on consentBffListener {
                     status: "APPROVED",
                     resources: {spId: submission.spId, application: trustedApp}
                 }],
+                validityTime: scopeConsentValidityTime,
                 attributes: {"sessionDataKeyConsent": submission.sessionDataKeyConsent}
             };
 

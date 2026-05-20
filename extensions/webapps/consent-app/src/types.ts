@@ -44,6 +44,7 @@ export interface ScopeConsentData {
   mandatoryClaims: string;
   existingConsentId?: string;
   previouslyApprovedScopes?: string[];
+  consentExpiryTime?: string;
   consentToken: string;
 }
 
@@ -74,6 +75,8 @@ export interface ConsentedPurpose {
   consentedElements: string[];
 }
 
+export type ConsentExpiryOption = '24h' | '3months' | 'never';
+
 export interface SubmitScopeConsentPayload {
   consentToken: string;
   sessionDataKeyConsent: string;
@@ -82,6 +85,7 @@ export interface SubmitScopeConsentPayload {
   approvedScopes?: string[];
   hiddenScopes?: string[];
   existingConsentId?: string;
+  consentExpiryOption?: ConsentExpiryOption;
 }
 
 export interface SubmitPurposeConsentPayload {

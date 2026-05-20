@@ -179,11 +179,11 @@
                                 </copy>
 
                                 <!--Add consent webapp (built dist + WEB-INF only)-->
-                                <copy todir="${product_home}/carbon-home/repository/deployment/server/webapps/consent">
+                                <copy todir="${product_home}/carbon-home/repository/deployment/server/webapps/open-healthcare">
                                     <fileset dir="${basedir}/../../extensions/webapps/consent-app/dist"
                                             includes="**"/>
                                 </copy>
-                                <copy todir="${product_home}/carbon-home/repository/deployment/server/webapps/consent/WEB-INF">
+                                <copy todir="${product_home}/carbon-home/repository/deployment/server/webapps/open-healthcare/WEB-INF">
                                     <fileset dir="${basedir}/../../extensions/webapps/consent-app/WEB-INF"
                                             includes="web.xml"/>
                                 </copy>
