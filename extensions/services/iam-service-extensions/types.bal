@@ -202,7 +202,7 @@ public type ConnectionConfig record {|
     boolean laxDataBinding = true;
 |};
 
-public type IdTokenRequestBody record {
+type IdTokenRequestBody record {
     # A unique identifier that associates with the token issuing flow in WSO2 Identity Server
     string flowId?;
     # A unique correlation identifier that associates with the token request received by WSO2 Identity Server
@@ -257,7 +257,7 @@ public type IdTokenClaims record {
 };
 
 # Defines the context data related to the pre issue ID token event that needs to be shared with the custom service to process and execute.
-public type IdTokenEvent record {
+type IdTokenEvent record {
     # Any additional parameters included in the ID token request. These may be custom parameters defined by the client or necessary for specific flows.
     Request request;
     # This property represents the tenant under which the token request is being processed.
@@ -277,12 +277,18 @@ public type ApiKeysConfig record {|
 |};
 
 # Defines the add operation.
+# 
+# + op - The type of operation to be performed, which is "add" in this case.
+# + paths - An array of JSON paths indicating where the new claims should be added in the
 public type addOperation record {
     "add" op;
     string[] paths;
 };
 
 # Defines the remove operation.
+# # 
+# + op - The type of operation to be performed, which is "add" in this case.
+# + paths - An array of JSON paths indicating where the new claims should be added in the
 public type removeOperation record {
     "remove" op;
     string[] paths;
