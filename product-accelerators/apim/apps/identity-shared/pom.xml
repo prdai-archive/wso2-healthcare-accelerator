@@ -6,12 +6,12 @@
     <parent>
         <groupId>org.wso2.healthcare</groupId>
         <artifactId>product-accelerators</artifactId>
-        <version>2.0.0</version>
+        <version>2.1.0-RC1</version>
         <relativePath>../../../pom.xml</relativePath>
     </parent>
 
     <artifactId>identity-shared</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0-RC1</version>
     <packaging>pom</packaging>
 
     <description>WSO2 Healthcare customized identity apps</description>
