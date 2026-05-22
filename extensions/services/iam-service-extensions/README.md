@@ -62,11 +62,14 @@ bal run
 | Key | Default | Description |
 |-----|---------|-------------|
 | `ehrContextResolveUrl` | `""` | EHR launch context endpoint; skipped when blank |
-| `isBaseUrl` | `""` | IS base URL |
+| `isBaseUrl` | `""` | IS base URL used for SCIM lookup and token introspect |
 | `scimClientId` / `scimClientSecret` | `""` | OAuth2 credentials for SCIM token |
 | `scimTokenEndpoint` | `""` | Defaults to `{isBaseUrl}/oauth2/token` |
 | `scimPatientGroupName` | `"patient"` | Group name used to identify patient users |
 | `fhirUserAttributeName` | `"fhirUser"` | SCIM custom attribute holding the FHIR user reference |
+| `patientAttributeName` | `"patient"` | SCIM custom attribute holding the patient resource reference |
+| `keystorePath` | `""` | Path to the keystore file for the HTTPS listener; HTTP used when blank |
+| `keystorePassword` | `""` | Password to open the keystore |
 | `alwaysAllowedScopes` | `["openid"]` | Scopes that bypass consent checks |
 
 ### Example Config.toml
@@ -84,6 +87,10 @@ ehrContextResolveUrl = "https://ehr.example.com/launch-context"
 isBaseUrl = "https://api.asgardeo.io/t/<tenant>"
 scimClientId = "<client-id>"
 scimClientSecret = "<client-secret>"
+
+# Optional: HTTPS listener
+keystorePath = "/path/to/keystore.p12"
+keystorePassword = "<keystore-password>"
 
 alwaysAllowedScopes = ["openid", "fhirUser"]
 ```

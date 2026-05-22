@@ -204,6 +204,7 @@ isolated function getOrCreateIsClient() returns http:Client|error {
         if existing is http:Client {
             return existing;
         }
+        log:printInfo("[IS Client] Creating new HTTP client for IS", baseUrl = isBaseUrl);
         http:ClientConfiguration isClientConfig = {secureSocket: buildHttpSecureSocket()};
         http:Client c = check new (isBaseUrl, isClientConfig);
         _isClient = c;
@@ -214,6 +215,7 @@ isolated function getOrCreateIsClient() returns http:Client|error {
 // Calls the IS /oauth2/introspect endpoint, forwarding the caller's Authorization header.
 isolated function callIsIntrospect(string token, string authHeader) returns http:Response|error {
     if isBaseUrl == "" {
+        log:printError("[Introspect] isBaseUrl not configured");
         return error("isBaseUrl not configured");
     }
     http:Client isClient = check getOrCreateIsClient();

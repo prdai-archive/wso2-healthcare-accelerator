@@ -47,6 +47,7 @@ service / on httpListener {
         // ── 0. Drop scopes not permitted for the current grant type ───────────
         log:printInfo(string `[${flowId}] Filtering scopes for grant type '${grantType}'`);
         string[] permittedTokenScopes = [];
+        if tokenScopes is string[] {
             foreach string s in tokenScopes {
                 if s.matches(scopeRegex) && !isPermittedScope(s, grantType) {
                     log:printWarn(string `[${flowId}]: Scope '${s}' not permitted for grant '${grantType}' — dropped early`);
@@ -294,6 +295,7 @@ service / on httpListener {
     isolated resource function post introspect(@http:Query string? token, http:Request req)
             returns http:Response|http:Unauthorized|http:BadRequest|http:InternalServerError {
 
+        log:printDebug("[Introspect] Processing introspect request");
         string|http:HeaderNotFoundError authHeaderResult = req.getHeader("Authorization");
         if authHeaderResult is http:HeaderNotFoundError {
             return <http:Unauthorized>{body: {message: "Missing Authorization header"}};
@@ -332,19 +334,25 @@ service / on httpListener {
             log:printError("[Introspect] IS introspect call failed", 'error = introspectResult);
             return <http:InternalServerError>{body: {message: introspectResult.message()}};
         }
+        if introspectResult.statusCode < 200 || introspectResult.statusCode >= 300 {
+            log:printError("[Introspect] IS introspect returned error status", statusCode = introspectResult.statusCode);
+            http:Response errResp = new;
+            errResp.statusCode = introspectResult.statusCode;
+            json|error errPayload = introspectResult.getJsonPayload();
+            if errPayload is json {
+                errResp.setJsonPayload(errPayload);
+            } else {
+                string|error rawBody = introspectResult.getTextPayload();
+                errResp.setTextPayload(rawBody is string ? rawBody : "");
+            }
+            return errResp;
+        }
+
         json|error payloadResult = introspectResult.getJsonPayload();
         if payloadResult is error || !(payloadResult is map<json>) {
             return <http:InternalServerError>{body: {message: "Invalid introspect response"}};
         }
         map<json> resp = payloadResult;
-
-        if introspectResult.statusCode < 200 || introspectResult.statusCode >= 300 {
-            log:printError("[Introspect] IS introspect returned error status", statusCode = introspectResult.statusCode, body = resp.toJsonString());
-            http:Response errResp = new;
-            errResp.statusCode = introspectResult.statusCode;
-            errResp.setJsonPayload(resp.toJson());
-            return errResp;
-        }
 
         // If token is inactive return as-is
         json active = resp["active"] ?: false;
@@ -367,6 +375,7 @@ service / on httpListener {
             if s == "openid" { hasOpenid = true; }
             if s == "launch/patient" { hasLaunchPatient = true; }
         }
+        log:printDebug("[Introspect] Processing scopes for claims enrichment", hasOpenid = hasOpenid, hasLaunchPatient = hasLaunchPatient);
 
         if hasOpenid || hasLaunchPatient {
             json subJson = resp["sub"] ?: "";
