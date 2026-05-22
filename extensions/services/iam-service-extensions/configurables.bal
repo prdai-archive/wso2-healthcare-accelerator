@@ -23,15 +23,21 @@ configurable string tppClientId = "";
 // EHR context resolution (optional — leave blank to skip)
 configurable string ehrContextResolveUrl = "";
 
+// IS base URL for SCIM and introspect endpoint (e.g. https://host:9443)
+configurable string isBaseUrl = "";
 // SCIM user lookup (optional — used to resolve patient ID from logged-in user)
-configurable string scimApiBaseUrl = "";
 configurable string scimApiPath = "/scim2/Users";
 configurable string scimClientId = "";
 configurable string scimClientSecret = "";
-// Leave empty to default to {scimApiBaseUrl}/oauth2/token
+// Leave empty to default to {isBaseUrl}/oauth2/token
 configurable string scimTokenEndpoint = "";
 configurable string scimPatientGroupName = "patient";
 configurable string fhirUserAttributeName = "fhirUser";
+configurable string patientAttributeName = "patient";
+
+// Key store for the HTTPS listener (leave blank to run as HTTP)
+configurable string keystorePath = "";
+configurable string keystorePassword = "";
 
 // Trust store for HTTPS connections to the IDP/SCIM/EHR endpoints
 configurable string trustStorePath = "";

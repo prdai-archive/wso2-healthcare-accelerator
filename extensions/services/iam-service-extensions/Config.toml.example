@@ -13,12 +13,11 @@ tppClientId = "<openfgc-tpp-client-id>"
 ehrContextResolveUrl = ""
 
 # SCIM user lookup (optional — used to resolve patient ID from the logged-in user)
-# Leave scimApiBaseUrl blank to skip SCIM lookup entirely.
-scimApiBaseUrl = "https://api.asgardeo.io/t/<tenant>"
+isBaseUrl = "https://api.asgardeo.io/t/<tenant>"
 scimApiPath = "/scim2/Users"
 scimClientId = "<scim-client-id>"
 scimClientSecret = "<scim-client-secret>"
-# Leave empty to default to {scimApiBaseUrl}/oauth2/token
+# Leave empty to default to {isBaseUrl}/oauth2/token
 scimTokenEndpoint = ""
 scimPatientGroupName = "patient"
 fhirUserAttributeName = "fhirUser"

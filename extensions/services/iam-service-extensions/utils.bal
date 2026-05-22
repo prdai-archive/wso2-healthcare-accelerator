@@ -83,9 +83,3 @@ isolated function getPatientIdFromScope(string scope) returns string? {
     return ();
 }
 
-isolated function getPatientIdFromFhirUser(string fhirUser) returns string? {
-    if fhirUser.startsWith("Patient/") && fhirUser.length() > 8 {
-        return fhirUser.substring(8);
-    }
-    return ();
-}

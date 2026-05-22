@@ -22,22 +22,6 @@ final http:Client openfgcClient = check new (openfgcBaseUrl);
 // Cached SCIM bearer token — avoids a token endpoint call on every request.
 isolated record {|string token; int expiresAt;|}? _scimTokenCache = ();
 
-// Lazy-init SCIM client — created on first use, reused across requests.
-isolated http:Client? _scimClient = ();
-
-isolated function getOrCreateScimClient() returns http:Client|error {
-    lock {
-        http:Client? existing = _scimClient;
-        if existing is http:Client {
-            return existing;
-        }
-        http:ClientConfiguration scimClientConfig = {secureSocket: buildHttpSecureSocket()};
-        http:Client c = check new (scimApiBaseUrl, scimClientConfig);
-        _scimClient = c;
-        return c;
-    }
-}
-
 // Lazy-init EHR client — created on first use, reused across requests.
 isolated http:Client? _ehrClient = ();
 
@@ -162,7 +146,7 @@ isolated function getScimToken() returns string|error {
             return cached.token;
         }
     }
-    string tokenUrl = scimTokenEndpoint == "" ? string `${scimApiBaseUrl}/oauth2/token` : scimTokenEndpoint;
+    string tokenUrl = scimTokenEndpoint == "" ? string `${isBaseUrl}/oauth2/token` : scimTokenEndpoint;
     oauth2:ClientCredentialsGrantConfig grantConfig = {
         tokenUrl: tokenUrl,
         clientId: scimClientId,
@@ -184,14 +168,14 @@ isolated function getScimToken() returns string|error {
 // Fetches SCIM user by ID for patient ID resolution.
 // Returns () if SCIM not configured.
 isolated function fetchScimUser(string userId) returns json|error {
-    if scimApiBaseUrl == "" || scimClientId == "" || scimClientSecret == "" {
+    if isBaseUrl == "" || scimClientId == "" || scimClientSecret == "" {
         log:printDebug("[SCIM] Skipped — not configured");
         return ();
     }
 
     log:printDebug("[SCIM] Fetching token via client credentials");
     string token = check getScimToken();
-    http:Client scimClient = check getOrCreateScimClient();
+    http:Client scimClient = check getOrCreateIsClient();
     string path = scimApiPath + "/" + getEncodedUri(userId);
     log:printDebug("[SCIM] GET user request", path = path);
     http:Response response = check scimClient->get(path, {
@@ -209,6 +193,40 @@ isolated function fetchScimUser(string userId) returns json|error {
     json result = check response.getJsonPayload();
     log:printDebug("[SCIM] GET user body", body = result.toJsonString());
     return result;
+}
+
+// Lazy-init IS client — used for token introspection.
+isolated http:Client? _isClient = ();
+
+isolated function getOrCreateIsClient() returns http:Client|error {
+    lock {
+        http:Client? existing = _isClient;
+        if existing is http:Client {
+            return existing;
+        }
+        log:printInfo("[IS Client] Creating new HTTP client for IS", baseUrl = isBaseUrl);
+        http:ClientConfiguration isClientConfig = {secureSocket: buildHttpSecureSocket()};
+        http:Client c = check new (isBaseUrl, isClientConfig);
+        _isClient = c;
+        return c;
+    }
+}
+
+// Calls the IS /oauth2/introspect endpoint, forwarding the caller's Authorization header.
+isolated function callIsIntrospect(string token, string authHeader) returns http:Response|error {
+    if isBaseUrl == "" {
+        log:printError("[Introspect] isBaseUrl not configured");
+        return error("isBaseUrl not configured");
+    }
+    http:Client isClient = check getOrCreateIsClient();
+    http:Request isReq = new;
+    isReq.setHeader("Authorization", authHeader);
+    isReq.setHeader("Content-Type", "application/x-www-form-urlencoded");
+    isReq.setTextPayload(string `token=${getEncodedUri(token)}`);
+    log:printDebug("[Introspect] POST /oauth2/introspect");
+    http:Response response = check isClient->post("/oauth2/introspect", isReq);
+    log:printDebug("[Introspect] IS introspect response", statusCode = response.statusCode);
+    return response;
 }
 
 // Resolves EHR launch context from the configured URL.
