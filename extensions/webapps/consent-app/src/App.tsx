@@ -19,7 +19,7 @@ import { getConsentData, submitConsent } from './api';
 import ScopeConsentPage from './ScopeConsentPage';
 import PurposeConsentPage from './PurposeConsentPage';
 import PatientPickerPage from './PatientPickerPage';
-import type { ConsentData, ScopeConsentData, PurposeConsentData, RedirectConsentData } from './types';
+import type { ConsentData, ConsentExpiryOption, ScopeConsentData, PurposeConsentData, RedirectConsentData } from './types';
 
 const IDP_AUTHORIZE_URL = window.config?.IDP_AUTHORIZE_URL || '';
 
@@ -140,10 +140,10 @@ function ConsentRoute() {
       return (
         <ScopeConsentPage
           data={scopeData}
-          onApprove={(scopes) =>
+          onApprove={(scopes, expiryOption) =>
             navigate(
               `/select-patient?sessionDataKeyConsent=${encodeURIComponent(sessionDataKeyConsent)}&spId=${encodeURIComponent(spId)}`,
-              { state: { approvedScopes: scopes, scopeData } },
+              { state: { approvedScopes: scopes, scopeData, consentExpiryOption: expiryOption } },
             )
           }
         />
@@ -159,6 +159,7 @@ function ConsentRoute() {
 interface PatientPickerState {
   approvedScopes: string[];
   scopeData: ScopeConsentData;
+  consentExpiryOption: ConsentExpiryOption;
 }
 
 function PatientPickerRoute() {
@@ -172,7 +173,7 @@ function PatientPickerRoute() {
     return <Navigate to={`/consent?${searchParams.toString()}`} replace />;
   }
 
-  const { approvedScopes, scopeData } = state;
+  const { approvedScopes, scopeData, consentExpiryOption } = state;
 
   return (
     <PatientPickerPage
@@ -191,6 +192,7 @@ function PatientPickerRoute() {
           approved: true,
           approvedScopes: finalScopes,
           hiddenScopes: scopeData.hiddenScopes,
+          consentExpiryOption,
           ...(scopeData.existingConsentId ? { existingConsentId: scopeData.existingConsentId } : {}),
         });
         submitIdpForm(sessionDataKeyConsent, 'approve', {

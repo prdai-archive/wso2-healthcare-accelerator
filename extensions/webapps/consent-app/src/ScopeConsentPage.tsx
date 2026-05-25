@@ -96,7 +96,7 @@ function parseMandatoryClaims(raw: string): Array<{ id: string; name: string }> 
 
 interface Props {
   data: ScopeConsentData;
-  onApprove?: (selectedScopes: string[]) => void;
+  onApprove?: (selectedScopes: string[], expiryOption: ConsentExpiryOption) => void;
 }
 
 export default function ScopeConsentPage({ data, onApprove }: Props) {
@@ -122,7 +122,7 @@ export default function ScopeConsentPage({ data, onApprove }: Props) {
 
   const handleApprove = async () => {
     if (onApprove) {
-      onApprove(selectedScopes);
+      onApprove(selectedScopes, selectedExpiry);
       return;
     }
     setSubmitting('approve');

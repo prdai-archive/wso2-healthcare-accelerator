@@ -585,6 +585,7 @@ service / on consentBffListener {
 
         if approvedScopes != () || hiddenScopes != () {
             // Scope flow: store all approved + hidden scopes in authorizations[].resources.scopes
+            log:printInfo("Processing consent submission for scope flow");
             int? scopeValidityTime = ();
             string? expiryOpt = submission.consentExpiryOption;
             if expiryOpt == "24h" {
@@ -594,6 +595,7 @@ service / on consentBffListener {
             } else if expiryOpt != "never" {
                 scopeValidityTime = scopeConsentValidityTime;
             }
+            log:printDebug(`Setting consent validity to ${scopeValidityTime} seconds`);
 
             string[] scopesToStore = [];
             if approvedScopes != () {
