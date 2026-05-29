@@ -44,7 +44,7 @@ export interface ScopeConsentData {
   mandatoryClaims: string;
   existingConsentId?: string;
   previouslyApprovedScopes?: string[];
-  consentExpiryTime?: string;
+  consentExpiryOption?: ConsentExpiryOption;
   consentToken: string;
 }
 

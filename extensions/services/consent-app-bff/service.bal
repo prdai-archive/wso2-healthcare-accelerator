@@ -257,7 +257,16 @@ isolated function getExistingConsent(string userId, string effectiveFlow) return
                 }
             }
         }
-        return {consentId, validityTime: existing.validityTime, approvedScopes, consentedPurposeNames: [], consentedElements: {}};
+        string? consentExpiryOption = ();
+        string? expirySecondsStr = existing.attributes["consentExpirySeconds"];
+        if expirySecondsStr == "86400" {
+            consentExpiryOption = "24h";
+        } else if expirySecondsStr == "7776000" {
+            consentExpiryOption = "3months";
+        } else if expirySecondsStr == "0" {
+            consentExpiryOption = "never";
+        }
+        return {consentId, validityTime: existing.validityTime, consentExpiryOption, approvedScopes, consentedPurposeNames: [], consentedElements: {}};
     }
 
     // Purpose flow: extract previously consented purposes and elements
@@ -481,6 +490,10 @@ service / on consentBffListener {
                 if existingConsentInfo.approvedScopes.length() > 0 {
                     scopeData.previouslyApprovedScopes = existingConsentInfo.approvedScopes;
                 }
+                string? prevExpiry = existingConsentInfo.consentExpiryOption;
+                if prevExpiry is string {
+                    scopeData.consentExpiryOption = prevExpiry;
+                }
             }
 
             return scopeData;
@@ -653,7 +666,10 @@ service / on consentBffListener {
                     resources: {spId: submission.spId, application: trustedApp, scopes: scopesToStore}
                 }],
                 validityTime: scopeValidityTime,
-                attributes: {"sessionDataKeyConsent": submission.sessionDataKeyConsent}
+                attributes: {
+                    "sessionDataKeyConsent": submission.sessionDataKeyConsent,
+                    "consentExpirySeconds": (scopeValidityTime is int ? scopeValidityTime : 0).toString()
+                }
             };
 
             http:Request req = new;

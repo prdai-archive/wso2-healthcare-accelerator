@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useState } from 'react';
-import { Box, Button, Checkbox, CircularProgress, FormControlLabel, Paper, Typography } from '@wso2/oxygen-ui';
+import React, { useState } from 'react';
+import { Box, Button, Checkbox, CircularProgress, FormControlLabel, Paper, Radio, RadioGroup, Typography } from '@wso2/oxygen-ui';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import { submitConsent } from './api';
@@ -37,8 +37,8 @@ function formatScopeLabel(scope: string): string {
   const [, compartment, resource, perms] = match;
   const resourceLabel = resource === '*' ? 'All Resources' : `/${resource}`;
   const context = compartment === 'patient'
-    ? 'on current patient'
-    : 'on current user';
+    ? 'on active patient'
+    : 'on active user';
 
   const types = [...new Set(perms.split(''))].map(p => PERM_LABEL[p]).filter(Boolean);
   if (types.length === 0) return scope;
@@ -109,7 +109,7 @@ export default function ScopeConsentPage({ data, onApprove }: Props) {
 
   const [submitting, setSubmitting] = useState<'approve' | 'deny' | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [selectedExpiry, setSelectedExpiry] = useState<ConsentExpiryOption>('24h');
+  const [selectedExpiry, setSelectedExpiry] = useState<ConsentExpiryOption>(data.consentExpiryOption ?? '24h');
 
   const EXPIRY_OPTIONS: { value: ConsentExpiryOption; label: string }[] = [
     { value: '24h', label: '24 Hours' },
@@ -117,8 +117,13 @@ export default function ScopeConsentPage({ data, onApprove }: Props) {
     { value: 'never', label: 'Never' },
   ];
 
-  const selectedScopes = selectableScopes;
-  const allChecked = selectableScopes.length > 0;
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(selectableScopes);
+  const allChecked = selectedScopes.length > 0;
+
+  const toggleScope = (scope: string) =>
+    setSelectedScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    );
 
   const handleApprove = async () => {
     if (onApprove) {
@@ -216,8 +221,8 @@ export default function ScopeConsentPage({ data, onApprove }: Props) {
                 key={scope}
                 control={
                   <Checkbox
-                    checked
-                    disabled
+                    checked={selectedScopes.includes(scope)}
+                    onChange={() => toggleScope(scope)}
                     size="small"
                     sx={{ p: '2px 8px 2px 4px' }}
                   />
@@ -237,23 +242,22 @@ export default function ScopeConsentPage({ data, onApprove }: Props) {
           <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'text.secondary', display: 'block', mb: 1 }}>
             Consent Expiry
           </Typography>
-          <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 1.5, display: 'flex', gap: 1 }}>
+          <RadioGroup
+            row
+            value={selectedExpiry}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedExpiry(e.target.value as ConsentExpiryOption)}
+            sx={{ bgcolor: 'background.default', borderRadius: 2, p: 1.5, gap: 1 }}
+          >
             {EXPIRY_OPTIONS.map((opt) => (
               <FormControlLabel
                 key={opt.value}
-                control={
-                  <Checkbox
-                    checked={selectedExpiry === opt.value}
-                    onChange={() => setSelectedExpiry(opt.value)}
-                    size="small"
-                    sx={{ p: '2px 8px 2px 4px' }}
-                  />
-                }
+                value={opt.value}
+                control={<Radio size="small" sx={{ p: '2px 8px 2px 4px' }} />}
                 label={<Typography variant="body2">{opt.label}</Typography>}
                 sx={{ m: 0, flex: 1 }}
               />
             ))}
-          </Box>
+          </RadioGroup>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
             By clicking 'Approve', you grant the above permissions.
           </Typography>
