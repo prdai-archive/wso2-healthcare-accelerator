@@ -162,12 +162,6 @@
                                             includes="**"/>
                                 </copy>
 
-                                <!--Add resources folder with repository config-->
-                                <copy todir="${product_home}/carbon-home/repository/conf">
-                                    <fileset dir="${basedir}/../../distribution/is-accelerator/resources/repository/conf"
-                                            includes="**"/>
-                                </copy>
-
                                 <!--Add temporary IS resources until the fixes are available in official pack-->
                                 <copy todir="${product_home}/carbon-home/repository/temp/components/dropins">
                                     <fileset dir="${basedir}/../../distribution/is-accelerator/resources/repository/temp/components/dropins"

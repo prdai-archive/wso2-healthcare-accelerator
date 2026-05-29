@@ -466,15 +466,6 @@ else
     fi
 fi
 
-if grep -Fxq "id = \"private_key_jwt_authenticator\"" "${WSO2_OH_APIM_HOME}"/repository/conf/deployment.toml || grep -Fxq "#id = \"private_key_jwt_authenticator\"" "${WSO2_OH_APIM_HOME}"/repository/conf/deployment.toml
-then
-    # code if found
-    echo -e "[WARN] private_key_jwt_authenticator configuration already exists"
-else
-    # code if not found
-    echo -e "\n[[event_listener]]\nid = \"private_key_jwt_authenticator\"\ntype = \"org.wso2.carbon.identity.core.handler.AbstractIdentityHandler\"\nname = \"org.wso2.healthcare.apim.clientauth.jwt.PrivateKeyJWTClientAuthenticator\"\norder = \"899\"\n#[event_listener.properties]\n#max_allowed_jwt_lifetime_seconds = \"300\"\n#token_endpoint_alias = \"sampleurl\"\n\n[[cache.manager]] \nname = \"IdentityApplicationManagementCacheManager\" \ntimeout = \"10\"\ncapacity = \"5000\""  | tee -a "${WSO2_OH_APIM_HOME}"/repository/conf/deployment.toml >/dev/null
-fi
-
 if grep -Fxq "[healthcare.organization]" "${WSO2_OH_APIM_HOME}"/repository/conf/deployment.toml || grep -Fxq "#[healthcare.organization]" "${WSO2_OH_APIM_HOME}"/repository/conf/deployment.toml
 then
     # code if found
