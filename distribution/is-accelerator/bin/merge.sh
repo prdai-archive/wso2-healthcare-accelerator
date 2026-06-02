@@ -119,8 +119,23 @@ fi
 
 # adding the consent webapp
 echo -e "[INFO] Deploying consent webapp.."
-mkdir -p "${WSO2_OH_IS_HOME}"/repository/deployment/server/webapps/open-healthcare
-cp -R "${ACCELERATOR_HOME}"/carbon-home/repository/deployment/server/webapps/open-healthcare/* "${WSO2_OH_IS_HOME}"/repository/deployment/server/webapps/open-healthcare
+CONSENT_WEBAPP_PATH="${WSO2_OH_IS_HOME}/repository/deployment/server/webapps/open-healthcare"
+CONSENT_CONFIG_JS="${CONSENT_WEBAPP_PATH}/config.js"
+
+# backup config.js if it exists from a previous deployment
+if [ -f "${CONSENT_CONFIG_JS}" ]; then
+  cp -f "${CONSENT_CONFIG_JS}" "${WSO2_OH_ACCELERATOR_AUDIT_BACKUP}/config.js"
+  echo -e "[INFO] Backed up existing config.js"
+fi
+
+mkdir -p "${CONSENT_WEBAPP_PATH}"
+cp -R "${ACCELERATOR_HOME}"/carbon-home/repository/deployment/server/webapps/open-healthcare/* "${CONSENT_WEBAPP_PATH}"
+
+# restore config.js after deploying new webapp artifacts
+if [ -f "${WSO2_OH_ACCELERATOR_AUDIT_BACKUP}/config.js" ]; then
+  cp -f "${WSO2_OH_ACCELERATOR_AUDIT_BACKUP}/config.js" "${CONSENT_CONFIG_JS}"
+  echo -e "[INFO] Restored config.js"
+fi
 
 # adding configurations to deployment.toml file
 echo -e "[INFO] Adding configurations to deployment.toml file"
@@ -134,7 +149,7 @@ if awk '/^\[server\]/{found=1; next} found && /^\[/{exit} found && /^\s*#?\s*off
   echo -e "[INFO] Updated server offset to 10"
 else
   # no offset line under [server] — insert after [server] line
-  sed -i.bak '/^\[server\]/a offset = 10' "${DEPLOYMENT_TOML}"
+  awk '/^\[server\]/{print; print "offset = 10"; next} {print}' "${DEPLOYMENT_TOML}" > "${DEPLOYMENT_TOML}.tmp" && mv "${DEPLOYMENT_TOML}.tmp" "${DEPLOYMENT_TOML}"
   echo -e "[INFO] Added offset = 10 under [server]"
 fi
 
