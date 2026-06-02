@@ -52,7 +52,8 @@ public class Constants {
 
     //TODO: populate these values from OH config file
     //Launch mode
-    public static final String SMART_LAUNCH_MODE = "launch-standalone";
+    public static final String SMART_LAUNCH_MODE_STANDALONE = "launch-standalone";
+    public static final String SMART_LAUNCH_MODE_EHR = "launch-ehr";
 
     //Client types http://hl7.org/fhir/smart-app-launch/conformance/index.html#client-types
     public static final String SMART_CLIENT_TYPE_CONFIDENTIAL = "client-confidential-symmetric";
@@ -85,7 +86,7 @@ public class Constants {
     protected static final List<String> SMART_RESPONSE_TYPES =
             Arrays.asList("code", "id_token", "token", "device", "id_token token");
     protected static final List<String> SMART_CAPABILITIES =
-            Arrays.asList(SMART_LAUNCH_MODE, SMART_CLIENT_TYPE_PUBLIC, SMART_CLIENT_TYPE_CONFIDENTIAL,
+            Arrays.asList(SMART_LAUNCH_MODE_STANDALONE, SMART_LAUNCH_MODE_EHR, SMART_CLIENT_TYPE_PUBLIC, SMART_CLIENT_TYPE_CONFIDENTIAL,
                     SMART_LAUNCH_CONTEXT_PATIENT, SMART_SSO_SUPPORT, SMART_PERMISSIONS_PATIENT,
                     SMART_PERMISSIONS_OFFLINE);
 }
