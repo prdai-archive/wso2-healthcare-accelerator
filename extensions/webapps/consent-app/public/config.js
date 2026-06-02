@@ -14,7 +14,7 @@
 
 window.config = {
     // Base URL of the BFF service (leave empty to use the relative path)
-    CONSENT_BFF_URL: "",
+    CONSENT_BFF_URL: "http://localhost:9092",
     // IDP authorize URL — used for the final form POST after consent is stored
-    IDP_AUTHORIZE_URL: ""
+    IDP_AUTHORIZE_URL: "https://localhost:9453/oauth2/authorize",
 };

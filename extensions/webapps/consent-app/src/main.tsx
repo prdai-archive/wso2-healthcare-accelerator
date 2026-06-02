@@ -36,7 +36,7 @@ const lightOnlyTheme = { ...baseTheme, colorSchemes: { light: baseTheme.colorSch
 // calls to the IDP OauthConsentKey API, which invalidates the session on first use.
 createRoot(document.getElementById('root')!).render(
   <OxygenUIThemeProvider theme={lightOnlyTheme}>
-    <BrowserRouter basename="/consent">
+    <BrowserRouter basename="/open-healthcare">
       <App />
     </BrowserRouter>
   </OxygenUIThemeProvider>,

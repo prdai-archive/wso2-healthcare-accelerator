@@ -13,37 +13,61 @@
 // limitations under the License.
 
 import { useEffect, useRef, useState } from 'react';
-import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Box, CircularProgress, Typography } from '@wso2/oxygen-ui';
-import { getConsentData } from './api';
+import { getConsentData, submitConsent } from './api';
 import ScopeConsentPage from './ScopeConsentPage';
 import PurposeConsentPage from './PurposeConsentPage';
 import PatientPickerPage from './PatientPickerPage';
-import type { ConsentData, ConsentPatient, ScopeConsentData, PurposeConsentData, RedirectConsentData } from './types';
+import type { ConsentData, ConsentExpiryOption, ScopeConsentData, PurposeConsentData, RedirectConsentData } from './types';
 
 const IDP_AUTHORIZE_URL = window.config?.IDP_AUTHORIZE_URL || '';
+
+function submitIdpForm(
+  sessionDataKeyConsent: string,
+  consent: 'approve' | 'deny',
+  options?: { claims?: Array<{ id: string }>; scopes?: string[] },
+) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = IDP_AUTHORIZE_URL;
+  const add = (name: string, value: string) => {
+    const el = document.createElement('input');
+    el.type = 'hidden';
+    el.name = name;
+    el.value = value;
+    form.appendChild(el);
+  };
+  add('sessionDataKeyConsent', sessionDataKeyConsent);
+  add('consent', consent);
+  add('hasApprovedAlways', 'false');
+  if (consent === 'approve') {
+    add('user_claims_consent', 'true');
+    for (const claim of options?.claims ?? []) {
+      add(`consent_${claim.id}`, 'approved');
+    }
+    if (options?.scopes?.length) {
+      add('scope', options.scopes.join(' '));
+    }
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function parseMandatoryClaims(raw: string): Array<{ id: string }> {
+  if (!raw) return [];
+  return raw.split(',').map((c) => {
+    const idx = c.indexOf('_');
+    return idx >= 0 ? { id: c.substring(0, idx) } : { id: c };
+  });
+}
 
 function AutoApproveScopePage({ sessionDataKeyConsent }: { sessionDataKeyConsent: string }) {
   const submitted = useRef(false);
   useEffect(() => {
     if (submitted.current) return;
     submitted.current = true;
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = IDP_AUTHORIZE_URL;
-    const add = (name: string, value: string) => {
-      const el = document.createElement('input');
-      el.type = 'hidden';
-      el.name = name;
-      el.value = value;
-      form.appendChild(el);
-    };
-    add('sessionDataKeyConsent', sessionDataKeyConsent);
-    add('consent', 'approve');
-    add('hasApprovedAlways', 'false');
-    add('user_claims_consent', 'true');
-    document.body.appendChild(form);
-    form.submit();
+    submitIdpForm(sessionDataKeyConsent, 'approve');
   }, [sessionDataKeyConsent]);
 
   return (
@@ -55,13 +79,13 @@ function AutoApproveScopePage({ sessionDataKeyConsent }: { sessionDataKeyConsent
 
 function ConsentRoute() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const sessionDataKeyConsent = searchParams.get('sessionDataKeyConsent') ?? '';
   const spId = searchParams.get('spId') ?? '';
 
   const [data, setData] = useState<ConsentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPatient, setSelectedPatient] = useState<ConsentPatient | null>(null);
 
   useEffect(() => {
     if (!sessionDataKeyConsent) {
@@ -111,49 +135,86 @@ function ConsentRoute() {
     if (scopeData.scopes.length === 0) {
       return <AutoApproveScopePage sessionDataKeyConsent={sessionDataKeyConsent} />;
     }
-    if (scopeData.isPractitioner && !selectedPatient && (scopeData.patients?.length ?? 0) > 0) {
+
+    if (scopeData.isPractitioner && (scopeData.patients?.length ?? 0) > 0) {
       return (
-        <PatientPickerPage
-          patients={scopeData.patients ?? []}
-          user={scopeData.user}
-          onProceed={setSelectedPatient}
-          onCancel={() => {
-            // Deny: form POST directly to IDP with consent=deny
-            const authorizeUrl = IDP_AUTHORIZE_URL;
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = authorizeUrl;
-            const field = document.createElement('input');
-            field.type = 'hidden';
-            field.name = 'sessionDataKeyConsent';
-            field.value = sessionDataKeyConsent;
-            form.appendChild(field);
-            const consentField = document.createElement('input');
-            consentField.type = 'hidden';
-            consentField.name = 'consent';
-            consentField.value = 'deny';
-            form.appendChild(consentField);
-            document.body.appendChild(form);
-            form.submit();
-          }}
+        <ScopeConsentPage
+          data={scopeData}
+          onApprove={(scopes, expiryOption) =>
+            navigate(
+              `/select-patient?sessionDataKeyConsent=${encodeURIComponent(sessionDataKeyConsent)}&spId=${encodeURIComponent(spId)}`,
+              { state: { approvedScopes: scopes, scopeData, consentExpiryOption: expiryOption } },
+            )
+          }
         />
       );
     }
-    return <ScopeConsentPage data={scopeData} selectedPatient={selectedPatient} />;
+
+    return <ScopeConsentPage data={scopeData} />;
   }
 
   return <PurposeConsentPage data={data as PurposeConsentData} />;
 }
 
+interface PatientPickerState {
+  approvedScopes: string[];
+  scopeData: ScopeConsentData;
+  consentExpiryOption: ConsentExpiryOption;
+}
+
+function PatientPickerRoute() {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const sessionDataKeyConsent = searchParams.get('sessionDataKeyConsent') ?? '';
+  const spId = searchParams.get('spId') ?? '';
+
+  const state = location.state as PatientPickerState | null;
+  if (!state?.approvedScopes || !state?.scopeData) {
+    return <Navigate to={`/consent?${searchParams.toString()}`} replace />;
+  }
+
+  const { approvedScopes, scopeData, consentExpiryOption } = state;
+
+  return (
+    <PatientPickerPage
+      patients={scopeData.patients ?? []}
+      user={scopeData.user}
+      onProceed={async (patient) => {
+        const fhirUser = patient.fhirUser ?? '';
+        const patientId = fhirUser.startsWith('Patient/') ? fhirUser.slice('Patient/'.length) : fhirUser;
+        const patientScope = patientId ? `OH_patient/${patientId}` : null;
+        const finalScopes = patientScope ? [...approvedScopes, patientScope] : [...approvedScopes];
+        const claims = parseMandatoryClaims(scopeData.mandatoryClaims);
+        await submitConsent({
+          consentToken: scopeData.consentToken,
+          sessionDataKeyConsent,
+          spId,
+          approved: true,
+          approvedScopes: finalScopes,
+          hiddenScopes: scopeData.hiddenScopes,
+          consentExpiryOption,
+          ...(scopeData.existingConsentId ? { existingConsentId: scopeData.existingConsentId } : {}),
+        });
+        submitIdpForm(sessionDataKeyConsent, 'approve', {
+          claims,
+          scopes: [...finalScopes, ...scopeData.hiddenScopes],
+        });
+      }}
+      onCancel={() => submitIdpForm(sessionDataKeyConsent, 'deny')}
+    />
+  );
+}
+
 function RedirectToConsentPage() {
   const [searchParams] = useSearchParams();
-  return <Navigate to={`/home?${searchParams.toString()}`} replace />;
+  return <Navigate to={`/consent?${searchParams.toString()}`} replace />;
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/home" element={<ConsentRoute />} />
+      <Route path="/consent" element={<ConsentRoute />} />
+      <Route path="/select-patient" element={<PatientPickerRoute />} />
       <Route path="*" element={<RedirectToConsentPage />} />
     </Routes>
   );

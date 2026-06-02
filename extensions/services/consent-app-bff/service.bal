@@ -257,7 +257,16 @@ isolated function getExistingConsent(string userId, string effectiveFlow) return
                 }
             }
         }
-        return {consentId, approvedScopes, consentedPurposeNames: [], consentedElements: {}};
+        string? consentExpiryOption = ();
+        string? expirySecondsStr = existing.attributes["consentExpirySeconds"];
+        if expirySecondsStr == "86400" {
+            consentExpiryOption = "24h";
+        } else if expirySecondsStr == "7776000" {
+            consentExpiryOption = "3months";
+        } else if expirySecondsStr == "0" {
+            consentExpiryOption = "never";
+        }
+        return {consentId, validityTime: existing.validityTime, consentExpiryOption, approvedScopes, consentedPurposeNames: [], consentedElements: {}};
     }
 
     // Purpose flow: extract previously consented purposes and elements
@@ -309,7 +318,7 @@ isolated function getExistingConsent(string userId, string effectiveFlow) return
         }
     }
 
-    return {consentId, approvedScopes: [], consentedPurposeNames, consentedElements};
+    return {consentId, validityTime: existing.validityTime, approvedScopes: [], consentedPurposeNames, consentedElements};
 }
 
 @http:ServiceConfig {
@@ -405,7 +414,7 @@ service / on consentBffListener {
                     continue;
                 }
                 if s.startsWith("OH_") || s.startsWith("launch") || s == "fhirUser" {
-                    log.debug("Hiding scope: " + s);
+                    log:printDebug("Hiding scope: " + s);
                     hiddenScopes.push(s);
                     continue;
                 }
@@ -480,6 +489,10 @@ service / on consentBffListener {
                 scopeData.existingConsentId = existingConsentInfo.consentId;
                 if existingConsentInfo.approvedScopes.length() > 0 {
                     scopeData.previouslyApprovedScopes = existingConsentInfo.approvedScopes;
+                }
+                string? prevExpiry = existingConsentInfo.consentExpiryOption;
+                if prevExpiry is string {
+                    scopeData.consentExpiryOption = prevExpiry;
                 }
             }
 
@@ -585,6 +598,18 @@ service / on consentBffListener {
 
         if approvedScopes != () || hiddenScopes != () {
             // Scope flow: store all approved + hidden scopes in authorizations[].resources.scopes
+            log:printInfo("Processing consent submission for scope flow");
+            int? scopeValidityTime = ();
+            string? expiryOpt = submission.consentExpiryOption;
+            if expiryOpt == "24h" {
+                scopeValidityTime = 86400;
+            } else if expiryOpt == "3months" {
+                scopeValidityTime = 7776000;
+            } else if expiryOpt != "never" {
+                scopeValidityTime = scopeConsentValidityTime;
+            }
+            log:printDebug(`Setting consent validity to ${scopeValidityTime} seconds`);
+
             string[] scopesToStore = [];
             if approvedScopes != () {
                 foreach string s in approvedScopes {
@@ -640,7 +665,11 @@ service / on consentBffListener {
                     status: "APPROVED",
                     resources: {spId: submission.spId, application: trustedApp, scopes: scopesToStore}
                 }],
-                attributes: {"sessionDataKeyConsent": submission.sessionDataKeyConsent}
+                validityTime: scopeValidityTime,
+                attributes: {
+                    "sessionDataKeyConsent": submission.sessionDataKeyConsent,
+                    "consentExpirySeconds": (scopeValidityTime is int ? scopeValidityTime : 0).toString()
+                }
             };
 
             http:Request req = new;
@@ -732,6 +761,7 @@ service / on consentBffListener {
                     status: "APPROVED",
                     resources: {spId: submission.spId, application: trustedApp}
                 }],
+                validityTime: scopeConsentValidityTime,
                 attributes: {"sessionDataKeyConsent": submission.sessionDataKeyConsent}
             };
 

@@ -71,3 +71,6 @@ configurable string fhirUserAttributeName = "fhirUser";
 
 # EHR launch context resolve endpoint (leave empty to disable)
 configurable string ehrContextResolveUrl = "";
+
+# Validity duration for scope consents sent to OpenFGC, in seconds (default: 3 hours)
+configurable int scopeConsentValidityTime = 10800;

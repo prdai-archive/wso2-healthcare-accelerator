@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useState, useCallback } from 'react';
-import { Box, Button, Checkbox, CircularProgress, FormControlLabel, Paper, Typography } from '@wso2/oxygen-ui';
+import React, { useState } from 'react';
+import { Box, Button, Checkbox, CircularProgress, FormControlLabel, Paper, Radio, RadioGroup, Typography } from '@wso2/oxygen-ui';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
 import { submitConsent } from './api';
-import type { ScopeConsentData, ConsentPatient } from './types';
+import type { ConsentExpiryOption, ScopeConsentData } from './types';
 
 const IDP_AUTHORIZE_URL = window.config?.IDP_AUTHORIZE_URL || '';
 
@@ -26,6 +26,28 @@ const SMART_REGEX = /^(patient|user|system)\/(\*|[A-Za-z]+)\.(cruds|(?=[cruds]+$
 function isValidSmartScope(s: string): boolean {
   if (/^(patient|user|system)\//.test(s)) return SMART_REGEX.test(s);
   return true;
+}
+
+const PERM_LABEL: Record<string, string> = { c: 'Write', r: 'Read', u: 'Update', d: 'Delete', s: 'Search' };
+
+function formatScopeLabel(scope: string): string {
+  const match = scope.match(/^(patient|user)\/(\*|[A-Za-z]+)\.([cruds]+)$/);
+  if (!match) return scope;
+
+  const [, compartment, resource, perms] = match;
+  const resourceLabel = resource === '*' ? 'All Resources' : `/${resource}`;
+  const context = compartment === 'patient'
+    ? 'on active patient'
+    : 'on active user';
+
+  const types = [...new Set(perms.split(''))].map(p => PERM_LABEL[p]).filter(Boolean);
+  if (types.length === 0) return scope;
+
+  const accessLabel = types.length === 1
+    ? `${types[0]} Access`
+    : `${types.slice(0, -1).join(', ')} and ${types[types.length - 1]} Access`;
+
+  return `${accessLabel} to ${resourceLabel} ${context}`;
 }
 
 function submitIdpForm(sessionDataKeyConsent: string, consent: 'approve' | 'deny', options?: {
@@ -74,64 +96,56 @@ function parseMandatoryClaims(raw: string): Array<{ id: string; name: string }> 
 
 interface Props {
   data: ScopeConsentData;
-  selectedPatient: ConsentPatient | null;
+  onApprove?: (selectedScopes: string[], expiryOption: ConsentExpiryOption) => void;
 }
 
-export default function ScopeConsentPage({ data, selectedPatient }: Props) {
-  const { sessionDataKeyConsent, spId, user, scopes, hiddenScopes, mandatoryClaims, previouslyApprovedScopes, consentToken } = data;
+export default function ScopeConsentPage({ data, onApprove }: Props) {
+  const { sessionDataKeyConsent, spId, user, scopes, hiddenScopes, mandatoryClaims, consentToken } = data;
 
   const claims = parseMandatoryClaims(mandatoryClaims);
 
   // Filter out OH_launch/* (already in hiddenScopes from BFF) and invalid SMART scopes
   const selectableScopes = scopes.filter(isValidSmartScope);
 
-  const [checked, setChecked] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      selectableScopes.map((s) => [s, previouslyApprovedScopes?.includes(s) ?? true]),
-    ),
-  );
-
   const [submitting, setSubmitting] = useState<'approve' | 'deny' | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [selectedExpiry, setSelectedExpiry] = useState<ConsentExpiryOption>(data.consentExpiryOption ?? '24h');
 
-  const selectedScopes = selectableScopes.filter((s) => checked[s]);
-  const allChecked = selectableScopes.length > 0 && selectableScopes.every((s) => checked[s]);
-  const noneChecked = selectableScopes.every((s) => !checked[s]);
+  const EXPIRY_OPTIONS: { value: ConsentExpiryOption; label: string }[] = [
+    { value: '24h', label: '24 Hours' },
+    { value: '3months', label: '3 Months' },
+    { value: 'never', label: 'Never' },
+  ];
 
-  const toggleScope = useCallback((scope: string) => {
-    setChecked((prev) => ({ ...prev, [scope]: !prev[scope] }));
-  }, []);
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(selectableScopes);
+  const allChecked = selectedScopes.length > 0;
 
-  const toggleAll = useCallback((val: boolean) => {
-    setChecked(Object.fromEntries(selectableScopes.map((s) => [s, val])));
-  }, [selectableScopes]);
-
-  const patientScope = (() => {
-    if (!selectedPatient?.fhirUser) return null;
-    const fhirUser = selectedPatient.fhirUser;
-    const patientId = fhirUser.startsWith('Patient/') ? fhirUser.slice('Patient/'.length) : fhirUser;
-    return patientId ? `OH_patient/${patientId}` : null;
-  })();
+  const toggleScope = (scope: string) =>
+    setSelectedScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    );
 
   const handleApprove = async () => {
+    if (onApprove) {
+      onApprove(selectedScopes, selectedExpiry);
+      return;
+    }
     setSubmitting('approve');
     setSubmitError(null);
-    const approvedScopes = patientScope
-      ? [...selectedScopes, patientScope]
-      : selectedScopes;
     try {
       await submitConsent({
         consentToken,
         sessionDataKeyConsent,
         spId,
         approved: true,
-        approvedScopes,
+        approvedScopes: selectedScopes,
         hiddenScopes,
+        consentExpiryOption: selectedExpiry,
         ...(data.existingConsentId ? { existingConsentId: data.existingConsentId } : {}),
       });
       submitIdpForm(sessionDataKeyConsent, 'approve', {
         claims,
-        scopes: [...approvedScopes, ...hiddenScopes],
+        scopes: [...selectedScopes, ...hiddenScopes],
       });
     } catch (err) {
       console.error('Failed to submit consent', err);
@@ -192,19 +206,9 @@ export default function ScopeConsentPage({ data, selectedPatient }: Props) {
 
         {/* Scope list */}
         <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'text.secondary' }}>
-              Requested Permissions
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button size="small" variant="text" onClick={() => toggleAll(true)} disabled={allChecked || submitting !== null} sx={{ textTransform: 'none', fontSize: '0.75rem', minWidth: 0, p: '2px 6px' }}>
-                All
-              </Button>
-              <Button size="small" variant="text" onClick={() => toggleAll(false)} disabled={noneChecked || submitting !== null} sx={{ textTransform: 'none', fontSize: '0.75rem', minWidth: 0, p: '2px 6px' }}>
-                None
-              </Button>
-            </Box>
-          </Box>
+          <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'text.secondary', display: 'block', mb: 1 }}>
+            Requested Permissions
+          </Typography>
 
           <Box sx={{ bgcolor: 'background.default', borderRadius: 2, p: 1.5, minHeight: 64 }}>
             {selectableScopes.length === 0 && (
@@ -217,14 +221,13 @@ export default function ScopeConsentPage({ data, selectedPatient }: Props) {
                 key={scope}
                 control={
                   <Checkbox
-                    checked={checked[scope] ?? false}
+                    checked={selectedScopes.includes(scope)}
                     onChange={() => toggleScope(scope)}
-                    disabled={submitting !== null}
                     size="small"
                     sx={{ p: '2px 8px 2px 4px' }}
                   />
                 }
-                label={<Typography variant="body2">{scope}</Typography>}
+                label={<Typography variant="body2">{formatScopeLabel(scope)}</Typography>}
                 sx={{ m: 0, display: 'flex', py: 0.25 }}
               />
             ))}
@@ -235,16 +238,37 @@ export default function ScopeConsentPage({ data, selectedPatient }: Props) {
           </Typography>
         </Box>
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3, textAlign: 'center' }}>
-          By clicking 'Approve', you grant the above permissions.
-        </Typography>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'text.secondary', display: 'block', mb: 1 }}>
+            Consent Expiry
+          </Typography>
+          <RadioGroup
+            row
+            value={selectedExpiry}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedExpiry(e.target.value as ConsentExpiryOption)}
+            sx={{ bgcolor: 'background.default', borderRadius: 2, p: 1.5, gap: 1 }}
+          >
+            {EXPIRY_OPTIONS.map((opt) => (
+              <FormControlLabel
+                key={opt.value}
+                value={opt.value}
+                control={<Radio size="small" sx={{ p: '2px 8px 2px 4px' }} />}
+                label={<Typography variant="body2">{opt.label}</Typography>}
+                sx={{ m: 0, flex: 1 }}
+              />
+            ))}
+          </RadioGroup>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            By clicking 'Approve', you grant the above permissions.
+          </Typography>
+        </Box>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <Button
             variant="contained"
             fullWidth
             onClick={() => void handleApprove()}
-            disabled={submitting !== null || selectedScopes.length === 0}
+            disabled={submitting !== null || !allChecked}
             sx={{ borderRadius: '50px', textTransform: 'none', fontWeight: 600, fontSize: '0.95rem', py: 1.25 }}
           >
             {submitting === 'approve' ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Approve'}

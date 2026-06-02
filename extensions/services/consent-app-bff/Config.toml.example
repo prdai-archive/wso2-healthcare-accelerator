@@ -40,6 +40,9 @@ alwaysAllowedScopes = ["openid"]
 singleConsentPerUser = false
 showConsentElements = true
 
+# Validity duration for scope consents sent to OpenFGC, in seconds (default: 3 hours)
+# scopeConsentValidityTime = 10800
+
 # Scope flow: which OpenFGC purpose wraps SMART scopes (element name is fetched from OpenFGC at startup)
 [scopeConsent]
 purposeName = "SMART Scope Authorization"
