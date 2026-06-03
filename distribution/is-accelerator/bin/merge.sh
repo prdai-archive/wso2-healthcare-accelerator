@@ -198,21 +198,12 @@ if [ "${enable_smart_on_fhir}" == "true" ]; then
       echo -e "[INFO] Patched resource-access-control-v2.xml.j2 for consent webapp"
   fi
 
-  if grep -Fq 'allowed-auth-handlers="BasicClientAuthentication"' "${J2_FILE}"
+  if grep -Fq "context=\"(.*)/oauth2/introspect(.*)\"" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
   then
-      echo -e "[WARN] resource-access-control-v2.xml.j2 already patched for oauth2/introspect"
+      echo -e "[WARN] resource.access_control for oauth2/introspect already exist"
   else
-      awk '
-        /resource_access_control\.introspect\.secured/ { in_block=1 }
-        in_block && /<\/Resource>/ {
-          print "        <Resource context=\"(.*)/oauth2/introspect(.*)\" secured=\"true\" http-method=\"all\""
-          print "                  allowed-auth-handlers=\"BasicClientAuthentication\"/>"
-          in_block=0; next
-        }
-        in_block { next }
-        { print }
-      ' "${J2_FILE}" > "${J2_FILE}.tmp" && mv "${J2_FILE}.tmp" "${J2_FILE}"
-      echo -e "[INFO] Patched resource-access-control-v2.xml.j2 for oauth2/introspect"
+      echo -e "\n[[resource.access_control]]\ncontext=\"(.*)/oauth2/introspect(.*)\"\nhttp_method=\"all\"\nsecure=true\nallowed_auth_handlers=\"BasicClientAuthentication\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
+      echo -e "[INFO] Added resource.access_control for oauth2/introspect"
   fi
 
   if grep -Fq "name = \"org.wso2.is.notification.ApimOauthEventInterceptor\"" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
