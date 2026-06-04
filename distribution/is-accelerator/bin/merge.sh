@@ -168,7 +168,7 @@ if [ "${enable_smart_on_fhir}" == "true" ]; then
       echo -e "[WARN] oauth.endpoints.v2 configuration already exist"
   else
       # code if not found
-      echo -e "\n[oauth.endpoints.v2]\noidc_consent_page=\"https://\$ref{server.hostname}:\${carbon.management.port}/open-healthcare/consent\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
+      echo -e "\n[oauth.endpoints.v2]\noidc_consent_page=\"https://\$ref{server.hostname}:\${carbon.management.port}/open-healthcare/consent\"\noauth2_consent_page=\"https://\$ref{server.hostname}:\${carbon.management.port}/open-healthcare/consent\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
   fi
 
   if grep -Fxq "[oauth.grant_type.authorization_code]" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
