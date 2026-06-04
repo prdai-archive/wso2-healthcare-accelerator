@@ -24,11 +24,11 @@
     <parent>
         <groupId>org.wso2.healthcare</groupId>
         <artifactId>distribution</artifactId>
-        <version>2.1.0-RC2</version>
+        <version>2.1.0-RC3</version>
     </parent>
 
     <artifactId>apim-accelerator</artifactId>
-    <version>2.1.0-RC2</version>
+    <version>2.1.0-RC3</version>
     <packaging>pom</packaging>
 
     <build>
@@ -143,11 +143,6 @@
                                     <fileset dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.claim.mgt/target">
                                         <include name="org.wso2.healthcare.apim.claim.mgt-${project.version}.jar"/>
                                     </fileset>
-                                    <!--Private key JWT auth Handler-->
-                                    <fileset
-                                            dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.clientauth.jwt/target">
-                                        <include name="org.wso2.healthcare.apim.clientauth.jwt-${project.version}.jar"/>
-                                    </fileset>
                                     <!--Scope Mgt Jar-->
                                     <fileset
                                             dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.scopemgt/target">
@@ -156,6 +151,10 @@
                                     <!--Backend JWT generator-->
                                     <fileset dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.gateway.security.jwt.generator/target">
                                         <include name="org.wso2.healthcare.apim.gateway.security.jwt.generator-${project.version}.jar"/>
+                                    </fileset>
+                                    <!--PKJWT Backend Auth Handler-->
+                                    <fileset dir="${basedir}/../../product-accelerators/apim/components/org.wso2.healthcare.apim.backendauth/target">
+                                        <include name="org.wso2.healthcare.apim.backendauth-${project.version}.jar"/>
                                     </fileset>
                                 </copy>
 

@@ -142,13 +142,11 @@ echo -e "[INFO] Adding configurations to deployment.toml file"
 
 # ensure server offset is set to 10
 DEPLOYMENT_TOML="${WSO2_OH_IS_HOME}/repository/conf/deployment.toml"
-# check if offset exists (active or commented) under [server] section (before next section header)
-if awk '/^\[server\]/{found=1; next} found && /^\[/{exit} found && /^\s*#?\s*offset\s*=/{exit 0} END{exit 1}' "${DEPLOYMENT_TOML}"; then
-  # offset exists (active or commented) under [server] — uncomment and set to 10
-  awk '/^\[server\]/{in_server=1} in_server && /^\[/ && !/^\[server\]/{in_server=0} in_server && /^\s*#?\s*offset\s*=/{print "offset = 10"; next} {print}' "${DEPLOYMENT_TOML}" > "${DEPLOYMENT_TOML}.tmp" && mv "${DEPLOYMENT_TOML}.tmp" "${DEPLOYMENT_TOML}"
-  echo -e "[INFO] Updated server offset to 10"
+SERVER_BLOCK=$(awk '/^\[server\]/{found=1; next} found && /^\[/{exit} found{print}' "${DEPLOYMENT_TOML}")
+if echo "${SERVER_BLOCK}" | grep -qE '^\s*offset\s*='; then
+  echo -e "[INFO] Server offset is already configured, skipping"
 else
-  # no offset line under [server] — insert after [server] line
+  # offset is commented or missing — insert after [server] line
   awk '/^\[server\]/{print; print "offset = 10"; next} {print}' "${DEPLOYMENT_TOML}" > "${DEPLOYMENT_TOML}.tmp" && mv "${DEPLOYMENT_TOML}.tmp" "${DEPLOYMENT_TOML}"
   echo -e "[INFO] Added offset = 10 under [server]"
 fi
@@ -170,7 +168,7 @@ if [ "${enable_smart_on_fhir}" == "true" ]; then
       echo -e "[WARN] oauth.endpoints.v2 configuration already exist"
   else
       # code if not found
-      echo -e "\n[oauth.endpoints.v2]\noidc_consent_page=\"http://localhost:9091/open-healthcare/consent\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
+      echo -e "\n[oauth.endpoints.v2]\noidc_consent_page=\"https://\$ref{server.hostname}:\${carbon.management.port}/open-healthcare/consent\"\noauth2_consent_page=\"https://\$ref{server.hostname}:\${carbon.management.port}/open-healthcare/consent\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
   fi
 
   if grep -Fxq "[oauth.grant_type.authorization_code]" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
@@ -198,6 +196,14 @@ if [ "${enable_smart_on_fhir}" == "true" ]; then
   else
       sed -i.bak 's|<Resource context="(.*)/console(.*)" secured="false" http-method="all"/>|<Resource context="(.*)/console(.*)" secured="false" http-method="all"/>\n        <Resource context="(.*)/open-healthcare(.*)" secured="false" http-method="all"/>|' "${J2_FILE}"
       echo -e "[INFO] Patched resource-access-control-v2.xml.j2 for consent webapp"
+  fi
+
+  if grep -Fq "context=\"(.*)/oauth2/introspect(.*)\"" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
+  then
+      echo -e "[WARN] resource.access_control for oauth2/introspect already exist"
+  else
+      echo -e "\n[[resource.access_control]]\ncontext=\"(.*)/oauth2/introspect(.*)\"\nhttp_method=\"all\"\nsecure=true\nallowed_auth_handlers=\"BasicClientAuthentication\""  | tee -a "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml >/dev/null
+      echo -e "[INFO] Added resource.access_control for oauth2/introspect"
   fi
 
   if grep -Fq "name = \"org.wso2.is.notification.ApimOauthEventInterceptor\"" "${WSO2_OH_IS_HOME}"/repository/conf/deployment.toml
