@@ -24,12 +24,12 @@
     <parent>
         <groupId>org.wso2.healthcare</groupId>
         <artifactId>healthcare-accelerator</artifactId>
-        <version>2.1.0-RC3</version>
+        <version>2.1.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>product-accelerators</artifactId>
-    <version>2.1.0-RC3</version>
+    <version>2.1.0</version>
     <packaging>pom</packaging>
 
     <modules>
