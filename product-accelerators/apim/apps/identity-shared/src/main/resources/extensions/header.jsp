@@ -26,6 +26,7 @@
 <%@ page import="java.net.URI"%>
 <%@ page import="org.apache.commons.lang.StringUtils"%>
 <%@ page import="org.wso2.healthcare.apim.core.api.server.DeploymentConfigAPI" %>
+<%@ page import="org.owasp.encoder.Encode" %>
 
 <%@ page import="org.wso2.carbon.identity.application.authentication.endpoint.util.AuthenticationEndpointUtil" %>
 <%@ page import="org.wso2.carbon.identity.mgt.endpoint.util.IdentityManagementEndpointUtil" %>
@@ -241,7 +242,7 @@
   String cssPath = request.getAttribute("customCSS") + "";
   if (!StringUtils.isEmpty(cssPath)) {
 %>
-      <link href=<%=cssPath%> rel="stylesheet" type="text/css">
+      <link href="<%=Encode.forHtmlAttribute(cssPath)%>" rel="stylesheet" type="text/css">
 <%	}
 %>
 

@@ -19,6 +19,7 @@
 <!-- localize.jsp MUST already be included in the calling script -->
 
 <%@ page import="org.apache.commons.lang.StringUtils"%>
+<%@ page import="org.owasp.encoder.Encode"%>
 
 <% if ("API Manager".equals(request.getAttribute("headerTitle"))) { %>
 <div class="product-title">
@@ -41,7 +42,7 @@
     if (!StringUtils.isEmpty(logoSrc)) {
 %>
         <div class="product-title box">
-            <img src=<%=logoSrc%> alt=<%=logoAltText%> height=<%=logoHeight%> width=<%=logoWidth%>>
+            <img src="<%=Encode.forHtmlAttribute(logoSrc)%>" alt="<%=Encode.forHtmlAttribute(logoAltText)%>" height="<%=Encode.forHtmlAttribute(logoHeight)%>" width="<%=Encode.forHtmlAttribute(logoWidth)%>">
             <h1 class="product-title-text"><%=request.getAttribute("headerTitle")%></h1>
         </div>
 <%  } else { %>
