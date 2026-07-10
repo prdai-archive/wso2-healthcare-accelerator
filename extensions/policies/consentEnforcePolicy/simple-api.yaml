@@ -1,0 +1,31 @@
+openapi: 3.0.1
+info:
+  title: Simple FHIR API Proxy
+  version: 1.0.0
+paths:
+  /.well-known/smart-configuration:
+    get:
+      responses:
+        '200':
+          description: OK
+  /*:
+    get:
+      responses:
+        '200':
+          description: OK
+    post:
+      responses:
+        '200':
+          description: OK
+    put:
+      responses:
+        '200':
+          description: OK
+    delete:
+      responses:
+        '200':
+          description: OK
+    patch:
+      responses:
+        '200':
+          description: OK
