@@ -43,7 +43,7 @@
 %>
         <div class="product-title box">
             <img src="<%=Encode.forHtmlAttribute(logoSrc)%>" alt="<%=Encode.forHtmlAttribute(logoAltText)%>" height="<%=Encode.forHtmlAttribute(logoHeight)%>" width="<%=Encode.forHtmlAttribute(logoWidth)%>">
-            <h1 class="product-title-text"><%=request.getAttribute("headerTitle")%></h1>
+           <h1 class="product-title-text"><%=Encode.forHtml(request.getAttribute("headerTitle") != null ? request.getAttribute("headerTitle").toString() : "")%></h1>
         </div>
 <%  } else { %>
         <div class="product-title box">
