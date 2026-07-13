@@ -26,6 +26,7 @@
 <%@ page import="java.net.URI"%>
 <%@ page import="org.apache.commons.lang.StringUtils"%>
 <%@ page import="org.wso2.healthcare.apim.core.api.server.DeploymentConfigAPI" %>
+<%@ page import="org.owasp.encoder.Encode" %>
 
 <%
   String tenant = request.getParameter("tenantDomain");
@@ -151,7 +152,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link rel="icon" href=<%=request.getAttribute("faviconSrc")%> type="image/x-icon"/>
+<link rel="icon" href="<%=Encode.forHtmlAttribute((String)request.getAttribute("faviconSrc"))%>" type="image/x-icon"/>
 
 <title><%=request.getAttribute("pageTitle")%></title>
 
@@ -684,7 +685,7 @@
   String cssPath = request.getAttribute("customCSS") + "";
   if (!StringUtils.isEmpty(cssPath)) {
 %>
-      <link href=<%=cssPath%> rel="stylesheet" type="text/css">
+      <link href="<%=Encode.forHtmlAttribute(cssPath)%>" rel="stylesheet" type="text/css">
 <%	}
 %>
 

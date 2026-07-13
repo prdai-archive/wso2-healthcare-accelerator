@@ -19,6 +19,7 @@
 <!-- localize.jsp MUST already be included in the calling script -->
 
 <%@ page import="org.apache.commons.lang.StringUtils"%>
+<%@ page import="org.owasp.encoder.Encode"%>
 
 <% if ("API Manager".equals(request.getAttribute("headerTitle"))) { %>
 <div class="product-title">
@@ -38,15 +39,17 @@
     String logoHeight = (String)request.getAttribute("logoHeight");
     String logoWidth = (String)request.getAttribute("logoWidth");
     String logoAltText = (String)request.getAttribute("logoAltText");
+    Object headerTitleObj = request.getAttribute("headerTitle");
+    String headerTitle = headerTitleObj != null ? headerTitleObj.toString() : "";
     if (!StringUtils.isEmpty(logoSrc)) {
 %>
         <div class="product-title box">
-            <img src=<%=logoSrc%> alt=<%=logoAltText%> height=<%=logoHeight%> width=<%=logoWidth%>>
-            <h1 class="product-title-text"><%=request.getAttribute("headerTitle")%></h1>
+            <img src="<%=Encode.forHtmlAttribute(logoSrc)%>" alt="<%=Encode.forHtmlAttribute(logoAltText)%>" height="<%=Encode.forHtmlAttribute(logoHeight)%>" width="<%=Encode.forHtmlAttribute(logoWidth)%>">
+            <h1 class="product-title-text"><%=Encode.forHtml(headerTitle)%></h1>
         </div>
 <%  } else { %>
         <div class="product-title box">
-            <h1 class="product-title-text" vertical-align="middle"><%=request.getAttribute("headerTitle")%></h1>
+            <h1 class="product-title-text" style="vertical-align: middle;"><%=Encode.forHtml(headerTitle)%></h1>
         </div>
 <%  } %>
 <% } %>
