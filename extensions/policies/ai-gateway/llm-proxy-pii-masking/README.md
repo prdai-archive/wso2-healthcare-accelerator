@@ -34,6 +34,21 @@ Then build the gateway image:
 ap gateway image build --name <gateway-name> --path <gateway-project-dir>
 ```
 
+## Tagging
+
+Each AI Gateway policy is published as a git tag named
+`<path>/v<major>.<minor>.<patch>` on this repository. The `@v0` ref in
+`build.yaml` resolves to the highest `v0.*` tag, so a tag must exist before the
+policy can be fetched. Cut it after merge:
+
+```sh
+git tag -a extensions/policies/ai-gateway/llm-proxy-pii-masking/v0.1.0 \
+  -m "pii-masking-openmed policy v0.1.0"
+git push origin extensions/policies/ai-gateway/llm-proxy-pii-masking/v0.1.0
+```
+
+Bump the patch/minor version and re-tag on any change to the policy.
+
 ## Layout
 
 - `policy-definition.yaml` — policy metadata (`pii-masking-openmed`).
