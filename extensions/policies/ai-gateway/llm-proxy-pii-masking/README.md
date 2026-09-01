@@ -27,6 +27,36 @@ The policy warms the model up by itself: the gateway imports the policy module a
 
 Requests then flow: client → `https://localhost:8443/openai/latest/chat/completions` → policy (redact, in-process model) → placeholders → OpenAI → policy (validating restore) → client. Responses are buffered, so `stream: true` isn't supported yet.
 
+## Using the policy in your own gateway
+
+The policy is a local Python gateway policy. Reference it with `filePath` in the gateway project's `build.yaml`, alongside the standard hub policies:
+
+```yaml
+version: v1
+gateway:
+  version: 1.2.1
+policies:
+  - name: advanced-ratelimit
+    gomodule: github.com/wso2/gateway-controllers/policies/advanced-ratelimit@v1
+  - name: llm-cost
+    gomodule: github.com/wso2/gateway-controllers/policies/llm-cost@v1
+  - name: set-headers
+    gomodule: github.com/wso2/gateway-controllers/policies/set-headers@v1
+  - name: pii-masking-openmed
+    filePath: policies/pii-masking-openmed
+```
+
+- `gomodule` / `pipPackage` entries are pulled from the policy hub; `filePath` marks a **local policy**.
+- `filePath` is relative to `build.yaml` and must point at a directory containing `policy-definition.yaml`, `policy.py`, and `requirements.txt` (copy `gateway/policies/pii-masking-openmed/` into your gateway project).
+
+Build the gateway image to bake in the policy and its dependencies (torch + openmed):
+
+```sh
+ap gateway image build --name <gateway-name> --path <gateway-project-dir>
+```
+
+See [Customizing the Gateway by Adding and Removing Policies](https://github.com/wso2/api-platform/blob/main/docs/cli/customizing-gateway-policies.md) in the API Platform docs for the full `build.yaml` reference.
+
 ## AI Workspace UI
 
 `make setup` also brings up the [AI Workspace](https://github.com/wso2/api-platform/blob/main/docs/ai-workspace/overview.md) control-plane UI: the Platform API on `:9243` and the web UI at **https://localhost:5380** (admin / admin, self-signed cert). Both run in the same compose project as the gateway, and setup connects them automatically — it registers `pii-gateway` via the Platform API, writes a registration token into `gateway/dist/.env`, and restarts the gateway controller, which then shows up **Active** under AI Gateways in the UI. `make down` stops everything.
