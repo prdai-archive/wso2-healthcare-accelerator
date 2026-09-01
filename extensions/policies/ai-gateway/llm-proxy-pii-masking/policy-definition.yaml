@@ -1,5 +1,5 @@
 name: pii-masking-openmed
-version: v1.0.0
+version: v0.1.0
 displayName: PII Masking (OpenMed)
 description: |
   Redacts the buffered request body in-process with an OpenMed
