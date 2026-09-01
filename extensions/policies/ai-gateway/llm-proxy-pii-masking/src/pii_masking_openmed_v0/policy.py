@@ -21,8 +21,9 @@ from apip_sdk_core import (
     ResponsePolicy,
     UpstreamRequestModifications,
 )
+
 MODEL_NAME = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-SKIP_KEYS = {"model", "role", "type", "name", "tool_call_id", "id"}
+SKIP_KEYS = {"model", "role"}
 
 logger = logging.getLogger("pii-masking-openmed")
 logger.setLevel(logging.INFO)
@@ -30,23 +31,6 @@ _handler = logging.StreamHandler()
 _handler.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(_handler)
 logger.propagate = False
-
-
-def _message_contents(payload: Any) -> str:
-    """The chat messages' text, without the JSON noise."""
-    try:
-        return " ".join(str(m["content"]) for m in payload["messages"])
-    except (TypeError, KeyError):
-        return json.dumps(payload)
-
-
-def _reply_contents(body: bytes) -> str:
-    """The assistant reply text out of a chat-completion response."""
-    try:
-        payload = json.loads(body)
-        return " ".join(str(c["message"]["content"]) for c in payload["choices"])
-    except (ValueError, TypeError, KeyError):
-        return body.decode("utf-8", errors="replace")
 
 
 class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
@@ -90,6 +74,20 @@ class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
             return self._redact_text(node, mapping)
         return node
 
+    def _restore_text(self, text_blob: str, mapping: dict[str, str]) -> str:
+        from openmed.service.privacy_gateway import reidentify_placeholders
+
+        return reidentify_placeholders(text_blob, mapping)
+
+    def _restore_structure(self, node: Any, mapping: dict[str, str]) -> Any:
+        if isinstance(node, dict):
+            return {k: self._restore_structure(v, mapping) for k, v in node.items()}
+        if isinstance(node, list):
+            return [self._restore_structure(item, mapping) for item in node]
+        if isinstance(node, str):
+            return self._restore_text(node, mapping)
+        return node
+
     def on_request_body(
         self,
         execution_ctx: ExecutionContext,
@@ -102,20 +100,20 @@ class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
         try:
             payload = json.loads(ctx.body.content)
         except (json.JSONDecodeError, UnicodeDecodeError):
-            logger.info("RECEIVED FROM CLIENT: (non-JSON body, rejected)")
+            logger.info("request %s: non-JSON body, rejected", ctx.shared.request_id)
             return ImmediateResponse(
                 status_code=400,
                 body=b'{"error": "request body must be JSON"}',
                 headers={"content-type": "application/json"},
             )
 
-        logger.info("RECEIVED FROM CLIENT: %s", _message_contents(payload))
+        logger.info("request %s: received %d-byte body", ctx.shared.request_id, len(ctx.body.content))
         mapping: dict[str, str] = {}
         try:
             redacted = self._redact_structure(payload, mapping)
         except Exception:
             # Fail closed: never forward a payload we could not redact cleanly.
-            logger.exception("PII redaction failed")
+            logger.exception("request %s: PII redaction failed", ctx.shared.request_id)
             return ImmediateResponse(
                 status_code=502,
                 body=b'{"error": "PII redaction failed"}',
@@ -125,7 +123,7 @@ class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
         masked = json.dumps(redacted).encode()
         if mapping:
             self._mappings[ctx.shared.request_id] = mapping
-        logger.info("SENT TO OPENAI: %s", _message_contents(redacted))
+        logger.info("request %s: forwarded %d-byte redacted body", ctx.shared.request_id, len(masked))
         return UpstreamRequestModifications(
             body=masked,
             headers_to_set={"content-length": str(len(masked))},
@@ -143,21 +141,20 @@ class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
         if ctx.response_body.content is None:
             return None
 
-        from openmed.service.privacy_gateway import PrivacyReidentificationError, reidentify_placeholders
-
-        text = ctx.response_body.content.decode("utf-8", errors="replace")
-        logger.info("RECEIVED FROM OPENAI: %s", _reply_contents(ctx.response_body.content))
+        logger.info("request %s: received %d-byte response", ctx.shared.request_id, len(ctx.response_body.content))
         try:
-            restored = reidentify_placeholders(text, mapping).encode()
-        except PrivacyReidentificationError:
-            # The LLM hallucinated or mangled a placeholder; passing the still-redacted response through leaks nothing.
-            logger.warning("response %s: reidentification rejected, leaving redacted", ctx.shared.request_id)
+            payload = json.loads(ctx.response_body.content)
+            restored = self._restore_structure(payload, mapping)
+            body = json.dumps(restored).encode()
+        except ValueError:
+            # Failed to parse or safely restore the response; pass the redacted body through unchanged.
+            logger.warning("request %s: reidentification rejected, leaving redacted", ctx.shared.request_id)
             return None
 
-        logger.info("RETURNED TO CLIENT: %s", _reply_contents(restored))
+        logger.info("request %s: returned %d-byte restored body", ctx.shared.request_id, len(body))
         return DownstreamResponseModifications(
-            body=restored,
-            headers_to_set={"content-length": str(len(restored))},
+            body=body,
+            headers_to_set={"content-length": str(len(body))},
         )
 
 
