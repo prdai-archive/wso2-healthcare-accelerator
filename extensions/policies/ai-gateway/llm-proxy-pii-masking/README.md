@@ -1,32 +1,51 @@
 # PII Masking (OpenMed) — AI Gateway Policy
 
-A custom Python policy for the WSO2 API Platform AI Gateway. It runs the
-OpenMed deidentification model in-process: every PII entity in an incoming LLM
-request becomes a delimited placeholder (`<<OPENMED_PHI_NAME_..._000001>>`)
-before the body reaches the LLM provider, and the placeholders the model echoes
-back are validated and swapped for the real values on the response flow. No
-sidecar service — the model lives inside the gateway runtime and the provider
-never sees the real data.
+A Python policy for the WSO2 API Platform AI Gateway that masks
+personally identifiable information (PII) in LLM traffic using the OpenMed
+deidentification model, running in-process inside the gateway — no sidecar
+service required.
+
+## What it does
+
+Before an LLM request leaves the gateway, every PII entity (names, dates, IDs,
+and other PHI) detected by the OpenMed model is replaced with a delimited
+placeholder such as `<<OPENMED_PHI_NAME_..._000001>>`. The real values never
+reach the LLM provider.
+
+On the response, the placeholders the model echoes back are swapped for the
+original values, so the client sees a coherent reply while the provider only
+ever saw redacted text.
+
+## When to use it
+
+- You send PHI/PII to a third-party LLM (e.g. OpenAI) and need it
+  de-identified at the edge, before it leaves your infrastructure.
+- You want masking without running a separate de-identification service — the
+  model lives inside the gateway runtime.
+
+## How it works
+
+1. **Request flow** — the buffered body is redacted in-process; a
+   placeholder → value map is kept in memory for the request.
+2. **Response flow** — placeholders are validated and restored. A hallucinated
+   or mangled placeholder rejects the restore, and the still-redacted response
+   is passed through unchanged rather than leaking data.
+
+Structural fields such as `model` and `role` are left untouched; only free-text
+strings are redacted.
 
 ## Using the policy
 
-Reference it from your gateway project's `build.yaml` with `pipPackage`. The
-gateway builder fetches it as a pip package from this repository at a version
-tag:
+Add it to your gateway project's `build.yaml`:
 
 ```yaml
 version: v1
 gateway:
   version: 1.2.1
 policies:
-  - name: advanced-ratelimit
-    gomodule: github.com/wso2/gateway-controllers/policies/advanced-ratelimit@v1
   - name: pii-masking-openmed
     pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/llm-proxy-pii-masking@v0
 ```
-
-`@v0` resolves to the highest `extensions/policies/ai-gateway/llm-proxy-pii-masking/v0.*`
-tag on this repository (e.g. `v0.1.0`).
 
 Then build the gateway image:
 
@@ -34,33 +53,27 @@ Then build the gateway image:
 ap gateway image build --name <gateway-name> --path <gateway-project-dir>
 ```
 
-## Tagging
+Attach `pii-masking-openmed` to the LLM provider or route you want masked, the
+same way you would any gateway policy.
 
-Each AI Gateway policy is published as a git tag named
-`<path>/v<major>.<minor>.<patch>` on this repository. The `@v0` ref in
-`build.yaml` resolves to the highest `v0.*` tag, so a tag must exist before the
-policy can be fetched. Cut it after merge:
+## Behavior
 
-```sh
-git tag -a extensions/policies/ai-gateway/llm-proxy-pii-masking/v0.1.0 \
-  -m "pii-masking-openmed policy v0.1.0"
-git push origin extensions/policies/ai-gateway/llm-proxy-pii-masking/v0.1.0
-```
+- Requests must be JSON; non-JSON bodies are rejected with `400`.
+- If redaction fails, the request fails closed with `502` — the raw payload is
+  never forwarded.
+- If the response can't be restored cleanly, the still-redacted response is
+  returned instead of leaking the original values.
+- The model is warmed up in the background at startup, so the first request
+  doesn't pay the full download/load cost (and it's cached across restarts).
 
-Bump the patch/minor version and re-tag on any change to the policy.
+## Configuration
 
-## Layout
+The policy takes no parameters — it works out of the box. See
+`policy-definition.yaml` for the (empty) parameter schema.
 
-- `policy-definition.yaml` — policy metadata (`pii-masking-openmed`).
-- `pyproject.toml` — pip package build config (hatchling).
-- `src/pii_masking_openmed_v0/policy.py` — the policy implementation (`get_policy` entrypoint).
-- `requirements.txt` — runtime dependencies (torch CPU, openmed, fastapi).
+## Limitations
 
-## Notes
-
-- The policy pins CPU-only PyTorch wheels (`torch==2.13.0+cpu`) to keep the
-  gateway image small; the PyTorch CPU index
-  (`https://download.pytorch.org/whl/cpu`) is required to resolve that wheel.
-- Responses are buffered, so `stream: true` isn't supported yet.
-
-See [Customizing the Gateway by Adding and Removing Policies](https://github.com/wso2/api-platform/blob/main/docs/cli/customizing-gateway-policies.md) in the API Platform docs.
+- Request and response bodies are buffered, so streaming (`stream: true`) isn't
+  supported yet.
+- Uses the `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1` model and pins
+  CPU-only PyTorch wheels to keep the gateway image small.
