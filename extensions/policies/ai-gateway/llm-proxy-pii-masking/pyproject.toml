@@ -1,0 +1,12 @@
+[project]
+name = "apim-ai-gateway-pii-policy"
+version = "0.1.0"
+description = "OpenMed PII-masking policy for the WSO2 API Platform AI Gateway"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.22",
+]

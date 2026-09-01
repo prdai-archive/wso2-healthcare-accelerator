@@ -1,0 +1,28 @@
+apiVersion: gateway.api-platform.wso2.com/v1
+kind: LlmProvider
+metadata:
+  name: openai-provider
+spec:
+  displayName: OpenAI Provider
+  version: v1.0
+  template: openai
+  context: /openai/latest
+  upstream:
+    url: https://api.openai.com/v1
+    auth:
+      type: api-key
+      header: Authorization
+      value: Bearer ${OPENAI_API_KEY}
+  accessControl:
+    mode: deny_all
+    exceptions:
+      - path: /chat/completions
+        methods: [POST]
+      - path: /models
+        methods: [GET]
+  policies:
+    - name: pii-masking-openmed
+      version: v1
+      paths:
+        - path: /chat/completions
+          methods: [POST]

@@ -1,0 +1,10 @@
+.venv
+.env
+test/.env
+__pycache__/
+.ruff_cache/
+test/test
+gateway/dist/
+gateway/.apwork/
+gateway/build-manifest.yaml
+workspace/dist/
