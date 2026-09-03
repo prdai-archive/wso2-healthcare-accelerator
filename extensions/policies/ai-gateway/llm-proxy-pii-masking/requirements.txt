@@ -1,4 +1,4 @@
-torch==2.13.0
+torch==2.13.0 ; python_version == "3.10" and sys_platform == "linux" and platform_machine == "x86_64"
 openmed[hf]>=1.9.1,<2.0.0
 # openmed.service.__init__ imports its FastAPI app, so importing
 # privacy_gateway needs fastapi present even though we never serve HTTP

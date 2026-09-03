@@ -73,7 +73,8 @@ The policy takes no parameters — it works out of the box. See
 
 ## Limitations
 
+- Supported only on Linux x86_64 with CPython 3.10, matching Gateway 1.2.1.
 - Request and response bodies are buffered, so streaming (`stream: true`) isn't
   supported yet.
 - Uses the `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1` model and pins
-  CPU-only PyTorch wheels to keep the gateway image small.
+  `torch==2.13.0` for the model runtime.
