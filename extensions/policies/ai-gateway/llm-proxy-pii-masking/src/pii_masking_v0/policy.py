@@ -95,7 +95,11 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
 
     def _restore_structure(self, node: Any, mapping: dict[str, str]) -> Any:
         if isinstance(node, dict):
-            return {k: self._restore_structure(v, mapping) for k, v in node.items()}
+            return {
+                self._restore_text(k, mapping) if isinstance(k, str) else k:
+                    self._restore_structure(v, mapping)
+                for k, v in node.items()
+            }
         if isinstance(node, list):
             return [self._restore_structure(item, mapping) for item in node]
         if isinstance(node, str):
