@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pii-masking-v0"
-version = "0.2.5"
+version = "0.2.6"
 description = "WSO2 AI Gateway PII masking policy (OpenMed deidentification model) for the Python executor"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 dependencies = [
-  "torch @ https://download.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp310-cp310-manylinux_2_28_x86_64.whl",
+  "torch==2.13.0",
   "openmed[hf]>=1.9.1,<2.0.0",
   "fastapi>=0.110.0,<1.0.0",
 ]
