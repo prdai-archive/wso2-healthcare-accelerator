@@ -1,6 +1,6 @@
-name: pii-masking-openmed
+name: pii-masking
 version: v0.1.0
-displayName: PII Masking (OpenMed)
+displayName: PII Masking
 description: |
   Redacts the buffered request body in-process with an OpenMed
   deidentification model — each detected entity becomes a delimited

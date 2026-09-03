@@ -20,7 +20,7 @@ ai-gateway/
 
 The `<policy-dir>` name is arbitrary; the policy's `name` comes from
 `policy-definition.yaml`. The `<module>` is the snake_case policy name with a
-`_v<major>` suffix (e.g. `pii_masking_openmed_v0`).
+`_v<major>` suffix (e.g. `pii_masking_v0`).
 
 ## Using a policy
 
@@ -31,7 +31,7 @@ version: v1
 gateway:
   version: 1.2.1
 policies:
-  - name: pii-masking-openmed
+  - name: pii-masking
     pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/llm-proxy-pii-masking@v0
 ```
 

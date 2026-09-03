@@ -1,4 +1,4 @@
-# PII Masking (OpenMed) — AI Gateway Policy
+# PII Masking — AI Gateway Policy
 
 A Python policy for the WSO2 API Platform AI Gateway that masks
 personally identifiable information (PII) in LLM traffic using the OpenMed
@@ -43,7 +43,7 @@ version: v1
 gateway:
   version: 1.2.1
 policies:
-  - name: pii-masking-openmed
+  - name: pii-masking
     pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/llm-proxy-pii-masking@v0
 ```
 
@@ -53,7 +53,7 @@ Then build the gateway image:
 ap gateway image build --name <gateway-name> --path <gateway-project-dir>
 ```
 
-Attach `pii-masking-openmed` to the LLM provider or route you want masked, the
+Attach `pii-masking` to the LLM provider or route you want masked, the
 same way you would any gateway policy.
 
 ## Behavior

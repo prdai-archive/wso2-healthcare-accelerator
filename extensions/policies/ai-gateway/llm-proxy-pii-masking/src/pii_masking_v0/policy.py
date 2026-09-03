@@ -1,3 +1,17 @@
+# Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+#
+# WSO2 LLC. licenses this file to you under the Apache License,
+# Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License. You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import annotations
 
 import json
@@ -25,7 +39,7 @@ from apip_sdk_core import (
 MODEL_NAME = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 SKIP_KEYS = {"model", "role"}
 
-logger = logging.getLogger("pii-masking-openmed")
+logger = logging.getLogger("pii-masking")
 logger.setLevel(logging.INFO)
 _handler = logging.StreamHandler()
 _handler.setFormatter(logging.Formatter("%(message)s"))
@@ -33,7 +47,7 @@ logger.addHandler(_handler)
 logger.propagate = False
 
 
-class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
+class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
     """Redact PII on the way to the LLM and restore it on the way back, in-process.
 
     Request phase: every free-text string in the buffered body is redacted with
@@ -159,7 +173,7 @@ class PiiMaskingOpenmedPolicy(RequestPolicy, ResponsePolicy):
 
 
 def get_policy(metadata, params):
-    return PiiMaskingOpenmedPolicy()
+    return PiiMaskingPolicy()
 
 
 def _warm_up_model() -> None:
