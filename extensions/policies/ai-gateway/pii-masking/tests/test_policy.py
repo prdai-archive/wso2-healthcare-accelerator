@@ -39,8 +39,8 @@ def load_policy_module() -> types.ModuleType:
     sdk.ResponsePolicy = type("ResponsePolicy", (), {})
 
     with patch.dict(sys.modules, {"apip_sdk_core": sdk}), patch("threading.Thread"):
-        module_path = Path(__file__).parents[1] / "src/policy.py"
-        spec = importlib.util.spec_from_file_location("src.policy", module_path)
+        module_path = Path(__file__).parents[1] / "src/pii_masking_v1/policy.py"
+        spec = importlib.util.spec_from_file_location("pii_masking_v1.policy", module_path)
         assert spec is not None and spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

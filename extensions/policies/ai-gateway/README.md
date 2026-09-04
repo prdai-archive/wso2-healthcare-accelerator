@@ -14,12 +14,14 @@ ai-gateway/
     ├── requirements.txt         # runtime dependencies
     ├── README.md
     └── src/
-        ├── __init__.py
-        └── policy.py            # get_policy(metadata, params) entrypoint
+        └── <package>/
+            ├── __init__.py
+            └── policy.py        # get_policy(metadata, params) entrypoint
 ```
 
 The `<policy-dir>` name is arbitrary; the policy's `name` comes from
-`policy-definition.yaml`.
+`policy-definition.yaml`. The `<package>` is the snake_case policy name with a
+`_v<major>` suffix, such as `pii_masking_v1`.
 
 ## Using a policy
 
