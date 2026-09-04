@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pii-masking-v0"
+version = "0.2.8"
+description = "WSO2 AI Gateway PII masking policy (OpenMed deidentification model) for the Python executor"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "torch==2.13.0; python_version == '3.10' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "openmed[hf]>=1.9.1,<2.0.0",
+  "fastapi>=0.110.0,<1.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pii_masking_v0"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel.force-include]
+"policy-definition.yaml" = "pii_masking_v0/policy-definition.yaml"
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+  "src/pii_masking_v0",
+  "pyproject.toml",
+  "policy-definition.yaml",
+  "README.md",
+]
