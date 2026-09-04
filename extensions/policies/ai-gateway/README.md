@@ -13,14 +13,13 @@ ai-gateway/
     ├── pyproject.toml           # pip build config (hatchling)
     ├── requirements.txt         # runtime dependencies
     ├── README.md
-    └── src/<module>/
+    └── src/
         ├── __init__.py
         └── policy.py            # get_policy(metadata, params) entrypoint
 ```
 
 The `<policy-dir>` name is arbitrary; the policy's `name` comes from
-`policy-definition.yaml`. The `<module>` is the snake_case policy name with a
-`_v<major>` suffix (e.g. `pii_masking_v1`).
+`policy-definition.yaml`.
 
 ## Using a policy
 

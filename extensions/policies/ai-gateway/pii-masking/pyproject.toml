@@ -16,17 +16,17 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pii_masking_v1"]
+packages = ["src"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel.force-include]
-"policy-definition.yaml" = "pii_masking_v1/policy-definition.yaml"
+"policy-definition.yaml" = "src/policy-definition.yaml"
 
 [tool.hatch.build.targets.sdist]
 only-include = [
-  "src/pii_masking_v1",
+  "src",
   "pyproject.toml",
   "policy-definition.yaml",
   "README.md",
