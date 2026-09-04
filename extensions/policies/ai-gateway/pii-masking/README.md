@@ -44,7 +44,7 @@ gateway:
   version: 1.2.1
 policies:
   - name: pii-masking
-    pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/pii-masking@v0
+    pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/pii-masking@v1
 ```
 
 Then build the gateway image:

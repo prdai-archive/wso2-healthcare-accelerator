@@ -20,7 +20,7 @@ ai-gateway/
 
 The `<policy-dir>` name is arbitrary; the policy's `name` comes from
 `policy-definition.yaml`. The `<module>` is the snake_case policy name with a
-`_v<major>` suffix (e.g. `pii_masking_v0`).
+`_v<major>` suffix (e.g. `pii_masking_v1`).
 
 ## Using a policy
 
@@ -32,7 +32,7 @@ gateway:
   version: 1.2.1
 policies:
   - name: pii-masking
-    pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/pii-masking@v0
+    pipPackage: github.com/wso2/healthcare-accelerator/extensions/policies/ai-gateway/pii-masking@v1
 ```
 
 Then build the image:
@@ -49,8 +49,8 @@ builder resolves `@v<major>` to the highest `<path>/v<major>.<minor>.<patch>`
 tag in the repository. A policy is only fetchable once its tag exists:
 
 ```sh
-git tag -a extensions/policies/ai-gateway/<policy-dir>/v0.1.0 -m "<name> policy v0.1.0"
-git push origin extensions/policies/ai-gateway/<policy-dir>/v0.1.0
+git tag -a extensions/policies/ai-gateway/<policy-dir>/v1.0.0 -m "<name> policy v1.0.0"
+git push origin extensions/policies/ai-gateway/<policy-dir>/v1.0.0
 ```
 
 On a change, bump the patch/minor version and re-tag.
