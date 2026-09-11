@@ -59,25 +59,47 @@ class RestoreStructureTest(unittest.TestCase):
         self.assertEqual(restored, {"Jane Doe": "summary"})
 
 
-class PipelineCacheTest(unittest.TestCase):
-    def test_reuses_the_loaded_privacy_filter_pipeline(self) -> None:
+class ModelLoaderCacheTest(unittest.TestCase):
+    def test_reuses_the_loaded_model_loader(self) -> None:
         policy_module = load_policy_module()
-        backend = types.ModuleType("openmed.core.backends")
-        backend.create_privacy_filter_pipeline = Mock(return_value=object())
+        models = types.ModuleType("openmed.core.models")
+        models.ModelLoader = Mock(return_value=object())
 
         with patch.dict(
             sys.modules,
             {
                 "openmed": types.ModuleType("openmed"),
                 "openmed.core": types.ModuleType("openmed.core"),
-                "openmed.core.backends": backend,
+                "openmed.core.models": models,
             },
         ):
-            first = policy_module._privacy_filter_pipeline()
-            second = policy_module._privacy_filter_pipeline()
+            first = policy_module._model_loader()
+            second = policy_module._model_loader()
 
         self.assertIs(first, second)
-        backend.create_privacy_filter_pipeline.assert_called_once_with(policy_module.MODEL_NAME)
+        models.ModelLoader.assert_called_once_with()
+
+
+class ExtractPiiLoaderTest(unittest.TestCase):
+    def test_passes_the_shared_loader_to_batch_extraction(self) -> None:
+        policy_module = load_policy_module()
+        pii = types.ModuleType("openmed.core.pii")
+        pii._extract_pii_batch = Mock(return_value=[object()])
+        loader = object()
+
+        with patch.dict(
+            sys.modules,
+            {
+                "openmed": types.ModuleType("openmed"),
+                "openmed.core": types.ModuleType("openmed.core"),
+                "openmed.core.pii": pii,
+            },
+        ), patch.object(policy_module, "_model_loader", return_value=loader):
+            policy_module._extract_pii("Jane Doe")
+
+        pii._extract_pii_batch.assert_called_once_with(
+            ["Jane Doe"], model_name=policy_module.MODEL_NAME, loader=loader
+        )
 
 
 class RequestRedactionScopeTest(unittest.TestCase):

@@ -41,8 +41,8 @@ SKIP_KEYS = {"model", "role", "tool_call_id"}
 TOOL_CALL_KEYS = {"id", "type"}
 TOOL_FUNCTION_KEYS = {"name"}
 
-_PIPELINE: Any | None = None
-_PIPELINE_LOCK = threading.Lock()
+_MODEL_LOADER: Any | None = None
+_MODEL_LOADER_LOCK = threading.Lock()
 
 logger = logging.getLogger("pii-masking")
 logger.setLevel(logging.INFO)
@@ -52,15 +52,15 @@ logger.addHandler(_handler)
 logger.propagate = False
 
 
-def _privacy_filter_pipeline() -> Any:
-    global _PIPELINE
-    if _PIPELINE is None:
-        with _PIPELINE_LOCK:
-            if _PIPELINE is None:
-                from openmed.core.backends import create_privacy_filter_pipeline
+def _model_loader() -> Any:
+    global _MODEL_LOADER
+    if _MODEL_LOADER is None:
+        with _MODEL_LOADER_LOCK:
+            if _MODEL_LOADER is None:
+                from openmed.core.models import ModelLoader
 
-                _PIPELINE = create_privacy_filter_pipeline(MODEL_NAME)
-    return _PIPELINE
+                _MODEL_LOADER = ModelLoader()
+    return _MODEL_LOADER
 
 
 def _extract_pii(text_blob: str) -> Any:
@@ -69,7 +69,7 @@ def _extract_pii(text_blob: str) -> Any:
     return _extract_pii_batch(
         [text_blob],
         model_name=MODEL_NAME,
-        privacy_filter_pipeline=_privacy_filter_pipeline(),
+        loader=_model_loader(),
     )[0]
 
 
