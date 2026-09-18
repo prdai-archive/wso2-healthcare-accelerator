@@ -68,8 +68,14 @@ def _sample_bundles() -> list[tuple[str, str, int]]:
     if not files:
         pytest.skip(f"No Synthea FHIR JSON found under {root}")
 
-    resources = [json.loads(path.read_text()) for path in files[:10]]
     max_text_bytes = int(os.getenv("MODEL_COMPARISON_MAX_TEXT_BYTES", "16384"))
+    if os.getenv("MODEL_COMPARISON_ALL_BUNDLES") == "1":
+        return [
+            (path.name, path.read_text()[:max_text_bytes], path.stat().st_size)
+            for path in files
+        ]
+
+    resources = [json.loads(path.read_text()) for path in files[:10]]
     bundles = []
     for count in (1, 5, 10):
         bundle = {"resourceType": "Bundle", "type": "batch", "entry": [{"resource": item} for item in resources[:count]]}

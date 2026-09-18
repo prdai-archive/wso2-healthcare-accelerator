@@ -109,3 +109,7 @@ one labelled point per model, and an average latency bar chart. Set
 or `MODEL_COMPARISON_PLOT` to choose the PNG output path. The reported scores are
 model-card metrics; local timings are machine-specific and are not an accuracy
 benchmark.
+
+Set `MODEL_COMPARISON_ALL_BUNDLES=1` to measure one bounded sample from every
+source Bundle in `SYNTHEA_FHIR_DIR` instead of the default 1-, 5-, and
+10-resource comparison profiles.
