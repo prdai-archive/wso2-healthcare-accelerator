@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import statistics
 import time
 from dataclasses import dataclass
@@ -70,9 +71,12 @@ def _sample_bundles() -> list[tuple[str, str, int]]:
 
     max_text_bytes = int(os.getenv("MODEL_COMPARISON_MAX_TEXT_BYTES", "16384"))
     if os.getenv("MODEL_COMPARISON_ALL_BUNDLES") == "1":
+        bundle_count = int(os.getenv("MODEL_COMPARISON_BUNDLE_COUNT", "100"))
+        seed = int(os.getenv("MODEL_COMPARISON_RANDOM_SEED", "20260918"))
+        selected = random.Random(seed).sample(files, min(bundle_count, len(files)))
         return [
             (path.name, path.read_text()[:max_text_bytes], path.stat().st_size)
-            for path in files
+            for path in selected
         ]
 
     resources = [json.loads(path.read_text()) for path in files[:10]]

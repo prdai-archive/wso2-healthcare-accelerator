@@ -110,6 +110,7 @@ or `MODEL_COMPARISON_PLOT` to choose the PNG output path. The reported scores ar
 model-card metrics; local timings are machine-specific and are not an accuracy
 benchmark.
 
-Set `MODEL_COMPARISON_ALL_BUNDLES=1` to measure one bounded sample from every
-source Bundle in `SYNTHEA_FHIR_DIR` instead of the default 1-, 5-, and
-10-resource comparison profiles.
+Set `MODEL_COMPARISON_ALL_BUNDLES=1` to sample source Bundles from
+`SYNTHEA_FHIR_DIR` instead of the default 1-, 5-, and 10-resource profiles.
+The default sample size is 100; change it with `MODEL_COMPARISON_BUNDLE_COUNT`
+and use `MODEL_COMPARISON_RANDOM_SEED` for a different reproducible sample.
