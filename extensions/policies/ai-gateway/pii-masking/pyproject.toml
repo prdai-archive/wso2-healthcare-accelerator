@@ -32,3 +32,14 @@ only-include = [
   "policy-definition.yaml",
   "README.md",
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0,<9.0"]
+comparison = ["pytest>=8.0,<9.0", "matplotlib>=3.8,<4.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: runs the real OpenMed model and may download model weights",
+  "model_comparison: downloads candidate OpenMed models and measures policy.py locally",
+]

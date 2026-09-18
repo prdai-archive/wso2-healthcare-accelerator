@@ -15,9 +15,10 @@
 import importlib.util
 import sys
 import types
-import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
+
+import pytest
 
 
 def load_policy_module() -> types.ModuleType:
@@ -47,7 +48,7 @@ def load_policy_module() -> types.ModuleType:
         return module
 
 
-class RestoreStructureTest(unittest.TestCase):
+class TestRestoreStructure:
     def test_restores_placeholder_in_object_key(self) -> None:
         policy_module = load_policy_module()
         policy = policy_module.PiiMaskingPolicy()
@@ -56,10 +57,10 @@ class RestoreStructureTest(unittest.TestCase):
         with patch.object(policy, "_restore_text", side_effect=lambda text, _: mapping.get(text, text)):
             restored = policy._restore_structure({"<<OPENMED_PHI_NAME_000001>>": "summary"}, mapping)
 
-        self.assertEqual(restored, {"Jane Doe": "summary"})
+        assert restored == {"Jane Doe": "summary"}
 
 
-class PipelineCacheTest(unittest.TestCase):
+class TestPipelineCache:
     def test_reuses_the_loaded_privacy_filter_pipeline(self) -> None:
         policy_module = load_policy_module()
         backend = types.ModuleType("openmed.core.backends")
@@ -76,11 +77,30 @@ class PipelineCacheTest(unittest.TestCase):
             first = policy_module._privacy_filter_pipeline()
             second = policy_module._privacy_filter_pipeline()
 
-        self.assertIs(first, second)
+        assert first is second
         backend.create_privacy_filter_pipeline.assert_called_once_with(policy_module.MODEL_NAME)
 
+    def test_keeps_a_pipeline_per_model(self) -> None:
+        policy_module = load_policy_module()
+        backend = types.ModuleType("openmed.core.backends")
+        backend.create_privacy_filter_pipeline = Mock(side_effect=[object(), object()])
 
-class RequestRedactionScopeTest(unittest.TestCase):
+        with patch.dict(
+            sys.modules,
+            {
+                "openmed": types.ModuleType("openmed"),
+                "openmed.core": types.ModuleType("openmed.core"),
+                "openmed.core.backends": backend,
+            },
+        ):
+            first = policy_module._privacy_filter_pipeline("model-a")
+            second = policy_module._privacy_filter_pipeline("model-b")
+
+        assert first is not second
+        assert backend.create_privacy_filter_pipeline.call_args_list == [call("model-a"), call("model-b")]
+
+
+class TestRequestRedactionScope:
     def test_redacts_all_request_content_and_tool_metadata(self) -> None:
         policy_module = load_policy_module()
         policy = policy_module.PiiMaskingPolicy()
@@ -111,11 +131,11 @@ class RequestRedactionScopeTest(unittest.TestCase):
                 {},
             )
 
-        self.assertEqual(result["messages"][0]["content"], "redacted:Jane Doe system instructions")
-        self.assertEqual(result["messages"][1]["content"], "redacted:Jane Doe developer instructions")
-        self.assertEqual(result["messages"][2]["content"], "redacted:Jane Doe")
-        self.assertEqual(result["tools"][0]["function"]["description"], "redacted:Read records for Jane Doe")
-        self.assertIn("Read records for Jane Doe", redacted)
+        assert result["messages"][0]["content"] == "redacted:Jane Doe system instructions"
+        assert result["messages"][1]["content"] == "redacted:Jane Doe developer instructions"
+        assert result["messages"][2]["content"] == "redacted:Jane Doe"
+        assert result["tools"][0]["function"]["description"] == "redacted:Read records for Jane Doe"
+        assert "Read records for Jane Doe" in redacted
 
     def test_preserves_tool_call_protocol_identifiers(self) -> None:
         policy_module = load_policy_module()
@@ -149,9 +169,9 @@ class RequestRedactionScopeTest(unittest.TestCase):
             )
 
         tool_call = result["messages"][0]["tool_calls"][0]
-        self.assertEqual(tool_call["id"], "call_FkfMPkwPsvW7CBExEySfLGEQ")
-        self.assertEqual(tool_call["type"], "function")
-        self.assertEqual(tool_call["function"]["name"], "search_fhir")
-        self.assertEqual(tool_call["function"]["arguments"], 'redacted:{"name":"Jane Doe"}')
-        self.assertEqual(result["messages"][1]["tool_call_id"], "call_FkfMPkwPsvW7CBExEySfLGEQ")
-        self.assertEqual(result["messages"][1]["content"], "redacted:Jane Doe patient record")
+        assert tool_call["id"] == "call_FkfMPkwPsvW7CBExEySfLGEQ"
+        assert tool_call["type"] == "function"
+        assert tool_call["function"]["name"] == "search_fhir"
+        assert tool_call["function"]["arguments"] == 'redacted:{"name":"Jane Doe"}'
+        assert result["messages"][1]["tool_call_id"] == "call_FkfMPkwPsvW7CBExEySfLGEQ"
+        assert result["messages"][1]["content"] == "redacted:Jane Doe patient record"

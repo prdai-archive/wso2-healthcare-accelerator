@@ -41,7 +41,7 @@ SKIP_KEYS = {"model", "role", "tool_call_id"}
 TOOL_CALL_KEYS = {"id", "type"}
 TOOL_FUNCTION_KEYS = {"name"}
 
-_PIPELINE: Any | None = None
+_PIPELINES: dict[str, Any] = {}
 _PIPELINE_LOCK = threading.Lock()
 
 logger = logging.getLogger("pii-masking")
@@ -52,24 +52,23 @@ logger.addHandler(_handler)
 logger.propagate = False
 
 
-def _privacy_filter_pipeline() -> Any:
-    global _PIPELINE
-    if _PIPELINE is None:
+def _privacy_filter_pipeline(model_name: str = MODEL_NAME) -> Any:
+    if model_name not in _PIPELINES:
         with _PIPELINE_LOCK:
-            if _PIPELINE is None:
+            if model_name not in _PIPELINES:
                 from openmed.core.backends import create_privacy_filter_pipeline
 
-                _PIPELINE = create_privacy_filter_pipeline(MODEL_NAME)
-    return _PIPELINE
+                _PIPELINES[model_name] = create_privacy_filter_pipeline(model_name)
+    return _PIPELINES[model_name]
 
 
-def _extract_pii(text_blob: str) -> Any:
+def _extract_pii(text_blob: str, model_name: str = MODEL_NAME) -> Any:
     from openmed.core.pii import _extract_pii_batch
 
     return _extract_pii_batch(
         [text_blob],
-        model_name=MODEL_NAME,
-        privacy_filter_pipeline=_privacy_filter_pipeline(),
+        model_name=model_name,
+        privacy_filter_pipeline=_privacy_filter_pipeline(model_name),
     )[0]
 
 
@@ -85,7 +84,8 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
     response is passed through unchanged.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, model_name: str = MODEL_NAME) -> None:
+        self.model_name = model_name
         self._mappings: dict[str, dict[str, str]] = {}
 
     def mode(self) -> ProcessingMode:
@@ -99,7 +99,7 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
             return text_blob
         from openmed.service.privacy_gateway import coerce_gateway_entities, redact_text
 
-        entities = coerce_gateway_entities(_extract_pii(text_blob), text_blob)
+        entities = coerce_gateway_entities(_extract_pii(text_blob, self.model_name), text_blob)
         session = redact_text(text_blob, entities, request_id=uuid.uuid4().hex)
         mapping.update(session.placeholder_map)
         return session.redacted_text

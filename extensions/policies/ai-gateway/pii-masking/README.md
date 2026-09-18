@@ -81,3 +81,28 @@ The policy takes no parameters — it works out of the box. See
   supported yet.
 - Uses the `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1` model and pins
   the CPU-only `torch==2.13.0` wheel for the model runtime and builder.
+
+## Testing and local model comparison
+
+Install the test extra in a supported Python 3.10 or 3.11 environment:
+
+```sh
+python -m pip install -e '.[test]'
+pytest -q
+```
+
+The tests exercise the policy's redaction and restoration functions directly;
+they do not require an AI Gateway or provider process. For a temporary local
+comparison of OpenMed checkpoints, install the comparison extra and run:
+
+```sh
+python -m pip install -e '.[comparison]'
+RUN_MODEL_COMPARISON=1 pytest -q -s -m model_comparison
+```
+
+The comparison records model load time, redaction time for 1-, 5-, and
+10-resource Synthea bundles, and the reported Nemotron-PII micro-F1. Set
+`SYNTHEA_FHIR_DIR` to another generated dataset and
+`MODEL_COMPARISON_PLOT` to choose the PNG output path. The reported scores are
+model-card metrics; local timings are machine-specific and are not an accuracy
+benchmark.
