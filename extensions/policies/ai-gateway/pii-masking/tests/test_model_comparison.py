@@ -81,15 +81,19 @@ def _plot(results: list[dict[str, Any]], output: Path) -> None:
 
     names = [item["name"] for item in results]
     f1 = [item["reported_f1"] for item in results]
-    latency = [item["median_seconds"] for item in results]
-    figure, axes = plt.subplots(1, 2, figsize=(11, 4))
-    axes[0].bar(names, f1, color="#2f6f9f")
-    axes[0].set_title("Reported Nemotron-PII micro-F1")
-    axes[0].set_ylim(0.9, 1.0)
-    axes[0].tick_params(axis="x", rotation=30)
+    latency = [item["average_seconds"] for item in results]
+    figure, axes = plt.subplots(1, 2, figsize=(12, 5))
+    axes[0].scatter(latency, f1, s=80, color="#2f6f9f")
+    for item in results:
+        axes[0].annotate(item["name"], (item["average_seconds"], item["reported_f1"]), xytext=(6, 6), textcoords="offset points")
+    axes[0].set_title("Quality versus average policy latency")
+    axes[0].set_xlabel("Average redaction time (seconds)")
+    axes[0].set_ylabel("Reported Nemotron-PII micro-F1")
+    axes[0].set_ylim(min(f1) - 0.005, max(f1) + 0.005)
+    axes[0].grid(alpha=0.25)
     axes[1].bar(names, latency, color="#c26d3a")
-    axes[1].set_title("Policy redaction median seconds")
-    axes[1].set_ylabel("seconds")
+    axes[1].set_title("Average policy redaction time")
+    axes[1].set_ylabel("seconds per bundle")
     axes[1].tick_params(axis="x", rotation=30)
     figure.tight_layout()
     figure.savefig(output, dpi=160)
@@ -119,6 +123,7 @@ def test_policy_model_comparison(tmp_path: Path, capsys) -> None:
             "model_id": candidate.model_id,
             "reported_f1": candidate.reported_f1,
             "load_seconds": load_seconds,
+            "average_seconds": statistics.mean(timings),
             "median_seconds": statistics.median(timings),
             "bundle_seconds": timings,
         }

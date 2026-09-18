@@ -100,8 +100,10 @@ python -m pip install -e '.[comparison]'
 RUN_MODEL_COMPARISON=1 pytest -q -s -m model_comparison
 ```
 
-The comparison records model load time, redaction time for 1-, 5-, and
-10-resource Synthea bundles, and the reported Nemotron-PII micro-F1. Set
+The comparison records model load time, average and median redaction time for
+1-, 5-, and 10-resource Synthea bundles, and the reported Nemotron-PII
+micro-F1. The generated plot includes a latency-versus-F1 scatter plot, with
+one labelled point per model, and an average latency bar chart. Set
 `SYNTHEA_FHIR_DIR` to another generated dataset and
 `MODEL_COMPARISON_PLOT` to choose the PNG output path. The reported scores are
 model-card metrics; local timings are machine-specific and are not an accuracy
