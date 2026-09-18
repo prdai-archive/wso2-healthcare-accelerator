@@ -57,7 +57,7 @@ CANDIDATES = (
 )
 
 
-def _sample_bundles() -> list[tuple[str, str]]:
+def _sample_bundles() -> list[tuple[str, str, int]]:
     root = Path(
         os.getenv(
             "SYNTHEA_FHIR_DIR",
@@ -69,10 +69,12 @@ def _sample_bundles() -> list[tuple[str, str]]:
         pytest.skip(f"No Synthea FHIR JSON found under {root}")
 
     resources = [json.loads(path.read_text()) for path in files[:10]]
+    max_text_bytes = int(os.getenv("MODEL_COMPARISON_MAX_TEXT_BYTES", "16384"))
     bundles = []
     for count in (1, 5, 10):
         bundle = {"resourceType": "Bundle", "type": "batch", "entry": [{"resource": item} for item in resources[:count]]}
-        bundles.append((f"{count}-resource", json.dumps(bundle)))
+        serialized = json.dumps(bundle)
+        bundles.append((f"{count}-resource", serialized[:max_text_bytes], len(serialized.encode())))
     return bundles
 
 
@@ -113,7 +115,7 @@ def test_policy_model_comparison(tmp_path: Path, capsys) -> None:
         policy._redact_text("Patient Jane Doe, DOB 1985-03-15", {})
         load_seconds = time.perf_counter() - load_started
         timings = []
-        for _, bundle in _sample_bundles():
+        for _, bundle, _ in _sample_bundles():
             mapping: dict[str, str] = {}
             started = time.perf_counter()
             policy._redact_text(bundle, mapping)
