@@ -68,10 +68,6 @@ def _sample_bundles() -> list[tuple[str, str, int]]:
     if not files:
         pytest.skip(f"No Synthea FHIR JSON found under {root}")
 
-    if os.getenv("MODEL_COMPARISON_FULL_BUNDLE") == "1":
-        serialized = files[0].read_text()
-        return [(files[0].name, serialized, len(serialized.encode()))]
-
     resources = [json.loads(path.read_text()) for path in files[:10]]
     max_text_bytes = int(os.getenv("MODEL_COMPARISON_MAX_TEXT_BYTES", "16384"))
     bundles = []
