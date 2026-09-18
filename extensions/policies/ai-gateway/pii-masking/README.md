@@ -109,3 +109,7 @@ one labelled point per model, and an average latency bar chart. Set
 or `MODEL_COMPARISON_PLOT` to choose the PNG output path. The reported scores are
 model-card metrics; local timings are machine-specific and are not an accuracy
 benchmark.
+
+To send one complete source Bundle without truncation, set
+`MODEL_COMPARISON_FULL_BUNDLE=1`. This is expected to be substantially slower
+and may exceed the model's effective token window.
