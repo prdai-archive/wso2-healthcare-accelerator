@@ -69,8 +69,10 @@ same way you would any gateway policy.
 
 ## Configuration
 
-The policy takes no parameters — it works out of the box. See
-`policy-definition.yaml` for the (empty) parameter schema.
+The policy takes one optional parameter, `enabled` (default `true`). Set it to
+`false` to forward traffic through the policy unchanged; when it is absent the
+policy falls back to the `PII_MASKING_ENABLED` environment variable, then to
+`true`. See `policy-definition.yaml` for the parameter schema.
 
 ## Limitations
 

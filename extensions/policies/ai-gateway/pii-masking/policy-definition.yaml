@@ -12,7 +12,14 @@ description: |
 parameters:
   type: object
   additionalProperties: false
-  properties: {}
+  properties:
+    enabled:
+      type: boolean
+      default: true
+      description: |
+        Mask PII on the request and restore it on the response. When false the
+        policy forwards traffic through unchanged. Falls back to the
+        PII_MASKING_ENABLED environment variable, then true.
 
 systemParameters:
   type: object

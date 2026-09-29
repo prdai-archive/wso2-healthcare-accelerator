@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -37,6 +38,8 @@ from apip_sdk_core import (
 )
 
 MODEL_NAME = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+ENABLED_PARAM = "enabled"
+ENABLED_ENV = "PII_MASKING_ENABLED"
 SKIP_KEYS = {"model", "role", "tool_call_id"}
 TOOL_CALL_KEYS = {"id", "type"}
 TOOL_FUNCTION_KEYS = {"name"}
@@ -63,6 +66,21 @@ def _model_loader() -> Any:
     return _MODEL_LOADER
 
 
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _resolve_enabled(params: dict[str, Any] | None) -> bool:
+    if params and ENABLED_PARAM in params:
+        return _coerce_bool(params[ENABLED_PARAM])
+    env = os.environ.get(ENABLED_ENV)
+    if env is not None:
+        return _coerce_bool(env)
+    return True
+
+
 def _extract_pii(text_blob: str) -> Any:
     from openmed.core.pii import _extract_pii_batch
 
@@ -85,7 +103,8 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
     response is passed through unchanged.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, enabled: bool = True) -> None:
+        self._enabled = enabled
         self._mappings: dict[str, dict[str, str]] = {}
 
     def mode(self) -> ProcessingMode:
@@ -176,6 +195,10 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
         ctx: RequestContext,
         params: dict[str, Any],
     ) -> RequestAction:
+        if not self._enabled:
+            logger.info("request %s: masking disabled, forwarding body unchanged", ctx.shared.request_id)
+            return None
+
         if ctx.body is None or not ctx.body.present or ctx.body.content is None:
             return None
 
@@ -217,6 +240,9 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
         ctx: ResponseContext,
         params: dict[str, Any],
     ) -> ResponseAction:
+        if not self._enabled:
+            return None
+
         mapping = self._mappings.pop(ctx.shared.request_id, None)
         if not mapping or ctx.response_body is None or not ctx.response_body.present:
             return None
@@ -241,7 +267,7 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
 
 
 def get_policy(metadata, params):
-    return PiiMaskingPolicy()
+    return PiiMaskingPolicy(enabled=_resolve_enabled(params))
 
 
 def _warm_up_model() -> None:
