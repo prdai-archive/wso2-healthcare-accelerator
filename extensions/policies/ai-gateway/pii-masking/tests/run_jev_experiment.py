@@ -12,287 +12,197 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Run the synthetic clinical-note dataset through the two masking modes.
+"""Show the time the Jev pre-check saves versus what it costs.
 
-`without_jev` always masks every record; `with_jev` asks Jev whether the record
-holds personal identifiers and only masks when it does (or when the record is
-too large to classify). The runner records per-record decisions, Jev token
-usage and cost, and wall-clock timing, then writes a results JSON and two
-comparison plots.
+Builds synthetic clinical notes at realistic lengths and runs the real policy
+over each one twice: once with ``jev=False`` (OpenMed masks everything) and once
+with ``jev=True`` (Jev decides whether to skip masking). Prints and plots the
+per-request latency distribution, the OpenMed time avoided, the Jev time added,
+and the Jev dollar cost.
 """
 
 from __future__ import annotations
 
-import argparse
+import importlib.util
 import json
+import statistics
+import sys
 import time
-from dataclasses import asdict, dataclass
+import types
 from pathlib import Path
-from typing import Any
-
-from experiment_plots import write_plots
-from jev_gate import (
-    DEFAULT_ENCODING,
-    DEFAULT_MASK_THRESHOLD,
-    DEFAULT_MODEL,
-    DEFAULT_SKIP_THRESHOLD,
-    STATE_TOKEN_BUDGET,
-    JevGate,
-    build_classifier,
-    estimate_tokens,
-)
-from test_policy import load_policy_module
+from types import SimpleNamespace
 
 HERE = Path(__file__).parent
-DEFAULT_DATASET = HERE / "clinical_notes.jsonl"
-DEFAULT_OUT_DIR = HERE / "experiment_results"
-PAYLOAD_MODEL = "gpt-4o-mini"
-MODES = ("without_jev", "with_jev")
-# The policy feeds each string to OpenMed whole; it has no chunking, so long
-# inputs are out of scope for this experiment and recorded as unmasked.
-OPENMED_MAX_INPUT_TOKENS = 2048
+OUT_DIR = HERE / "experiment_results"
+JEV_PRICE_PER_TOKEN = 0.042 / 1_000_000
+SIZES = (1024, 2048, 4096)
+REPEATS = 2
+FILLER = "The patient tolerated the procedure well with stable vitals throughout recovery. "
+PATIENTS = (
+    "Referral for Alice Nguyen, MRN-4100137, DOB 1968-04-12, phone +1-555-0100. ",
+    "Discharge for Marcus Bell, MRN-4100274, DOB 1975-11-02, email marcus.bell@example.com. ",
+    "Pre-auth for Priya Raman, MRN-4100411, DOB 1990-07-23, insurance INS-4823-904. ",
+)
 
 
-@dataclass
-class RecordOutcome:
-    record_id: str
-    mode: str
-    has_pii: bool
-    masked: bool
-    reason: str
-    leaked_entities: list[str]
-    roundtrip_ok: bool
-    probability: float | None
-    estimated_tokens: int
-    jev_input_tokens: int
-    jev_output_tokens: int
-    jev_cost_usd: float
-    gate_latency_s: float
-    mask_latency_s: float
-    demask_latency_s: float
-    wall_latency_s: float
-    mask_error: str | None
+def _load_policy_module() -> types.ModuleType:
+    from unittest.mock import patch
+
+    class _Modification:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    sdk = types.ModuleType("apip_sdk_core")
+    for name in (
+        "ImmediateResponse",
+        "UpstreamRequestModifications",
+        "DownstreamResponseModifications",
+        "ProcessingMode",
+        "BodyProcessingMode",
+        "ExecutionContext",
+        "RequestContext",
+        "ResponseContext",
+        "RequestAction",
+        "ResponseAction",
+    ):
+        setattr(sdk, name, _Modification)
+    sdk.RequestPolicy = type("RequestPolicy", (), {})
+    sdk.ResponsePolicy = type("ResponsePolicy", (), {})
+
+    module_path = HERE.parent / "src/pii_masking_v1/policy.py"
+    spec = importlib.util.spec_from_file_location("pii_masking_v1.policy", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    with patch.dict(sys.modules, {"apip_sdk_core": sdk}), patch("threading.Thread"):
+        spec.loader.exec_module(module)
+    return module
 
 
-def _payload(text: str) -> dict[str, Any]:
-    return {"model": PAYLOAD_MODEL, "messages": [{"role": "user", "content": text}]}
+def _build_note(target_tokens: int, has_pii: bool, serial: int, encoding) -> str:
+    unit = encoding.encode(FILLER)
+    header = encoding.encode(PATIENTS[serial % len(PATIENTS)]) if has_pii else []
+    repeats = max(1, (target_tokens - len(header)) // len(unit))
+    body = FILLER * repeats
+    return (PATIENTS[serial % len(PATIENTS)] + body) if has_pii else body
 
 
-def _load_records(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-
-
-def _redacted_text(redacted: Any) -> str:
-    return json.dumps(redacted, ensure_ascii=False)
-
-
-def _run_masked(policy: Any, payload: dict[str, Any], entities: list[str], text_tokens: int) -> tuple[
-    list[str], bool, float, float, str | None
-]:
-    if text_tokens > OPENMED_MAX_INPUT_TOKENS:
-        return [], True, 0.0, 0.0, f"input exceeds openmed window ({text_tokens} tokens), masking skipped"
-
-    mapping: dict[str, str] = {}
-    mask_started = time.perf_counter()
-    try:
-        redacted = policy._redact_structure(payload, mapping)
-    except Exception as exc:
-        return list(entities), False, time.perf_counter() - mask_started, 0.0, f"{type(exc).__name__}: {exc}"
-    mask_latency = time.perf_counter() - mask_started
-
-    leaked = [entity for entity in entities if entity and entity in _redacted_text(redacted)]
-
-    demask_started = time.perf_counter()
-    restored = policy._restore_structure(redacted, mapping)
-    demask_latency = time.perf_counter() - demask_started
-    return leaked, restored == payload, mask_latency, demask_latency, None
-
-
-def _evaluate_record(
-    policy: Any,
-    gate: JevGate,
-    record: dict[str, Any],
-    mode: str,
-    masking_enabled: bool,
-) -> RecordOutcome:
+def _run_request(policy, request_id: str, text: str) -> float:
+    body = json.dumps({"model": "gpt-4o-mini", "messages": [{"role": "user", "content": text}]}).encode()
     started = time.perf_counter()
-    payload = _payload(record["text"])
-    entities: list[str] = record["entities"]
-    text_tokens = gate.estimate(record["text"])
+    ctx = SimpleNamespace(
+        shared=SimpleNamespace(request_id=request_id),
+        body=SimpleNamespace(present=True, content=body),
+    )
+    action = policy.on_request_body(None, ctx, {})
+    response_body = getattr(action, "body", None) or body
+    rctx = SimpleNamespace(
+        shared=SimpleNamespace(request_id=request_id),
+        response_body=SimpleNamespace(present=True, content=response_body),
+    )
+    policy.on_response_body(None, rctx, {})
+    return time.perf_counter() - started
 
-    if mode == "without_jev":
-        masked = masking_enabled
-        gate_latency = 0.0
-        probability = None
-        estimated = 0
-        jev_input = jev_output = 0
-        jev_cost = 0.0
-        reason = "always" if masking_enabled else "masking_disabled"
-    else:
-        outcome = gate.evaluate(record["text"], masking_enabled=masking_enabled)
-        masked = outcome.should_mask
-        gate_latency = outcome.jev_latency_s or 0.0
-        probability = outcome.probability
-        estimated = outcome.estimated_tokens
-        jev_input = outcome.jev_input_tokens or 0
-        jev_output = outcome.jev_output_tokens or 0
-        jev_cost = outcome.jev_cost_usd
-        reason = outcome.reason
 
-    if masked:
-        leaked, roundtrip_ok, mask_latency, demask_latency, mask_error = _run_masked(
-            policy, payload, entities, text_tokens
-        )
-    else:
-        leaked, roundtrip_ok, mask_latency, demask_latency, mask_error = list(entities), True, 0.0, 0.0, None
+def _plot(rows: list[dict[str, float]], path: Path) -> None:
+    import matplotlib
 
-    return RecordOutcome(
-        record_id=record["id"],
-        mode=mode,
-        has_pii=record["has_pii"],
-        masked=masked,
-        reason=reason,
-        leaked_entities=leaked,
-        roundtrip_ok=roundtrip_ok,
-        probability=probability,
-        estimated_tokens=estimated,
-        jev_input_tokens=jev_input,
-        jev_output_tokens=jev_output,
-        jev_cost_usd=jev_cost,
-        gate_latency_s=gate_latency,
-        mask_latency_s=mask_latency,
-        demask_latency_s=demask_latency,
-        wall_latency_s=time.perf_counter() - started,
-        mask_error=mask_error,
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    without = [row["without_s"] for row in rows]
+    with_jev = [row["with_s"] for row in rows]
+    jev_total = sum(row["jev_s"] for row in rows)
+    openmed_without = sum(without)
+    openmed_with = sum(with_jev) - jev_total
+    cost = sum(row["jev_cost_usd"] for row in rows)
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+
+    axes[0].boxplot([without, with_jev], tick_labels=["without Jev", "with Jev"], showfliers=False)
+    for index, series in enumerate((without, with_jev), start=1):
+        jitter = [index + (i % 5 - 2) * 0.03 for i in range(len(series))]
+        axes[0].scatter(jitter, series, alpha=0.6, s=22, color=["#dd8452", "#4c72b0"][index - 1])
+    axes[0].set_ylabel("seconds per request")
+    axes[0].set_title("Per-request latency distribution")
+
+    axes[1].bar(["without Jev", "with Jev"], [openmed_without, openmed_with], color="#dd8452", label="OpenMed")
+    axes[1].bar(["with Jev"], [jev_total], bottom=[openmed_with], color="#4c72b0", label="Jev")
+    axes[1].set_ylabel("seconds (total)")
+    axes[1].set_title("Where the time goes")
+    axes[1].legend()
+    axes[1].text(
+        0.5,
+        -0.18,
+        f"OpenMed time avoided: {openmed_without - openmed_with:.1f}s   "
+        f"Jev time added: {jev_total:.1f}s   "
+        f"net saved: {sum(without) - sum(with_jev):.1f}s   cost: ${cost:.4f}",
+        ha="center",
+        transform=axes[1].transAxes,
+        fontsize=10,
     )
 
-
-def _summarize(outcomes: list[RecordOutcome]) -> dict[str, Any]:
-    pii = [o for o in outcomes if o.has_pii]
-    non_pii = [o for o in outcomes if not o.has_pii]
-    reasons: dict[str, int] = {}
-    for outcome in outcomes:
-        reasons[outcome.reason] = reasons.get(outcome.reason, 0) + 1
-
-    return {
-        "records": len(outcomes),
-        "records_masked": sum(o.masked for o in outcomes),
-        "records_skipped": sum(not o.masked for o in outcomes),
-        "pii_total": len(pii),
-        "pii_caught": sum(o.masked and not o.leaked_entities for o in pii),
-        "pii_missed": sum((not o.masked) or bool(o.leaked_entities) for o in pii),
-        "non_pii_total": len(non_pii),
-        "non_pii_masked": sum(o.masked for o in non_pii),
-        "non_pii_skipped": sum(not o.masked for o in non_pii),
-        "gate_tp": sum(o.masked and o.has_pii for o in outcomes),
-        "gate_fp": sum(o.masked and not o.has_pii for o in outcomes),
-        "gate_tn": sum(not o.masked and not o.has_pii for o in outcomes),
-        "gate_fn": sum(not o.masked and o.has_pii for o in outcomes),
-        "entities_leaked": sum(len(o.leaked_entities) for o in outcomes),
-        "roundtrip_failures": sum(o.masked and not o.roundtrip_ok for o in outcomes),
-        "mask_errors": sum(o.mask_error is not None for o in outcomes),
-        "jev_calls": sum(1 for o in outcomes if o.jev_input_tokens),
-        "jev_input_tokens": sum(o.jev_input_tokens for o in outcomes),
-        "jev_output_tokens": sum(o.jev_output_tokens for o in outcomes),
-        "jev_cost_usd": sum(o.jev_cost_usd for o in outcomes),
-        "gate_latency_s": sum(o.gate_latency_s for o in outcomes),
-        "mask_latency_s": sum(o.mask_latency_s for o in outcomes),
-        "demask_latency_s": sum(o.demask_latency_s for o in outcomes),
-        "wall_latency_s": sum(o.wall_latency_s for o in outcomes),
-        "reasons": reasons,
-    }
-
-
-def _warm_up(policy: Any, gate: JevGate, masking_enabled: bool) -> None:
-    if not masking_enabled:
-        return
-    try:
-        policy._redact_text("warm up", {})
-    except Exception as exc:
-        print(f"openmed warm-up failed: {type(exc).__name__}: {exc}")
-    try:
-        gate.classifier("warm up")
-    except Exception as exc:
-        print(f"jev warm-up failed: {type(exc).__name__}: {exc}")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
-    parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
-    parser.add_argument("--limit", type=int, default=None, help="only run the first N records")
-    parser.add_argument("--masking", choices=("on", "off"), default="on")
-    parser.add_argument("--mask-threshold", type=float, default=DEFAULT_MASK_THRESHOLD)
-    parser.add_argument("--skip-threshold", type=float, default=DEFAULT_SKIP_THRESHOLD)
-    parser.add_argument("--token-budget", type=int, default=STATE_TOKEN_BUDGET)
-    parser.add_argument("--encoding", default=DEFAULT_ENCODING)
-    parser.add_argument("--no-plot", action="store_true")
-    parser.add_argument("--replot", action="store_true", help="only regenerate plots from results.json")
-    args = parser.parse_args()
+    import tiktoken
 
-    if args.replot:
-        result = json.loads((args.out_dir / "results.json").read_text(encoding="utf-8"))
-        write_plots(result["modes"], result["outcomes"], args.out_dir)
-        print(f"wrote plots to {args.out_dir}")
+    if "--replot" in sys.argv:
+        data = json.loads((OUT_DIR / "results.json").read_text(encoding="utf-8"))
+        _plot(data["rows"], OUT_DIR / "time_saved.png")
+        print(f"wrote {OUT_DIR / 'time_saved.png'}")
         return
 
-    records = _load_records(args.dataset)
-    if args.limit:
-        records = records[: args.limit]
+    encoding = tiktoken.get_encoding("cl100k_base")
+    module = _load_policy_module()
+    off = module.PiiMaskingPolicy(jev=False)
+    on = module.PiiMaskingPolicy(jev=True)
+    off._redact_text("warm up", {})
+    on._redact_text("warm up", {})
 
-    masking_enabled = args.masking == "on"
-    policy = load_policy_module().PiiMaskingPolicy(enabled=masking_enabled)
-    gate = JevGate(
-        classifier=build_classifier(),
-        mask_threshold=args.mask_threshold,
-        skip_threshold=args.skip_threshold,
-        token_budget=args.token_budget,
-        estimate=lambda text: estimate_tokens(text, args.encoding),
-    )
+    rows: list[dict[str, float]] = []
+    skipped = 0
+    serial = 0
+    for target in SIZES:
+        for repeat in range(REPEATS):
+            for has_pii in (True, False):
+                serial += 1
+                text = _build_note(target, has_pii, serial + repeat, encoding)
+                without_s = _run_request(off, f"off-{serial}", text)
+                with_s = _run_request(on, f"on-{serial}", text)
+                decision = on.last_jev or {}
+                if not decision.get("mask", True):
+                    skipped += 1
+                rows.append(
+                    {
+                        "tokens": len(encoding.encode(text)),
+                        "has_pii": float(has_pii),
+                        "without_s": without_s,
+                        "with_s": with_s,
+                        "jev_s": decision.get("latency_s", 0.0),
+                        "probability": decision.get("probability") or 0.0,
+                        "jev_cost_usd": decision.get("input_tokens", 0) * JEV_PRICE_PER_TOKEN,
+                    }
+                )
+                print(f"{serial:2d} tok={len(encoding.encode(text)):5d} pii={has_pii} "
+                      f"off={without_s:6.2f}s on={with_s:6.2f}s p={decision.get('probability')}", flush=True)
 
-    print(f"running {len(records)} records, masking={args.masking}, model={DEFAULT_MODEL}")
-    _warm_up(policy, gate, masking_enabled)
-    outcomes: dict[str, list[RecordOutcome]] = {mode: [] for mode in MODES}
-    for mode in MODES:
-        for index, record in enumerate(records, start=1):
-            outcomes[mode].append(_evaluate_record(policy, gate, record, mode, masking_enabled))
-            if index % 10 == 0 or index == len(records):
-                print(f"[{mode} {index}/{len(records)}]", flush=True)
-
-    summaries = {mode: _summarize(outcomes[mode]) for mode in MODES}
-    config = {
-        "dataset": str(args.dataset),
-        "records": len(records),
-        "model": DEFAULT_MODEL,
-        "masking_enabled": masking_enabled,
-        "mask_threshold": args.mask_threshold,
-        "skip_threshold": args.skip_threshold,
-        "token_budget": args.token_budget,
-        "encoding": args.encoding,
+    summary = {
+        "requests": len(rows),
+        "skipped": skipped,
+        "mean_without_s": statistics.mean(row["without_s"] for row in rows),
+        "mean_with_s": statistics.mean(row["with_s"] for row in rows),
+        "total_without_s": sum(row["without_s"] for row in rows),
+        "total_with_s": sum(row["with_s"] for row in rows),
+        "total_jev_s": sum(row["jev_s"] for row in rows),
+        "total_cost_usd": sum(row["jev_cost_usd"] for row in rows),
     }
-    result = {
-        "config": config,
-        "modes": summaries,
-        "outcomes": {mode: [asdict(o) for o in outcomes[mode]] for mode in MODES},
-    }
-
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    results_path = args.out_dir / "results.json"
-    results_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print(f"wrote {results_path}")
-
-    for mode in MODES:
-        summary = summaries[mode]
-        print(
-            f"{mode}: masked={summary['records_masked']} skipped={summary['records_skipped']} "
-            f"pii_missed={summary['pii_missed']} non_pii_masked={summary['non_pii_masked']} "
-            f"jev_tokens={summary['jev_input_tokens']}/{summary['jev_output_tokens']} "
-            f"jev_cost=${summary['jev_cost_usd']:.6f} time={summary['wall_latency_s']:.1f}s"
-        )
-
-    if not args.no_plot:
-        write_plots(summaries, {mode: [asdict(o) for o in outcomes[mode]] for mode in MODES}, args.out_dir)
-        print(f"wrote plots to {args.out_dir}")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "results.json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=2), encoding="utf-8")
+    _plot(rows, OUT_DIR / "time_saved.png")
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
