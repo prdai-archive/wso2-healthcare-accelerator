@@ -106,8 +106,9 @@ def plot(rows: list[dict], path: Path) -> None:
     fig.text(
         0.5,
         0.01,
-        f"OpenMed avoided {openmed_without - openmed_with:.1f}s | Jev added {jev_total:.1f}s | "
-        f"net saved {openmed_without - openmed_with - jev_total:.1f}s | cost ${cost:.4f}",
+        f"{len(rows)} requests | OpenMed avoided {openmed_without - openmed_with:.1f}s | "
+        f"Jev added {jev_total:.1f}s | net saved {openmed_without - openmed_with - jev_total:.1f}s | "
+        f"cost ${cost:.4f}",
         ha="center",
         fontsize=11,
     )
