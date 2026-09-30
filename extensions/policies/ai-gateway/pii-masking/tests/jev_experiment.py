@@ -12,13 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Run tests/requests.json through the policy with Jev off and on, then plot.
-
-Prints the per-request timings, asserts the gate never skips a PII request, and
-writes jev_experiment.png showing the per-request latency distribution and the
-time Jev saves versus what it costs.
-"""
-
 from __future__ import annotations
 
 import importlib.util
