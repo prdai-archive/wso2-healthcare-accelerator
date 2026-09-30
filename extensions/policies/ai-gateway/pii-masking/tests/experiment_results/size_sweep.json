@@ -1,0 +1,108 @@
+{
+  "summary": {
+    "sizes": 12,
+    "window_sizes": 6,
+    "mean_jev_s": 0.4818719338121203,
+    "mean_openmed_s": 47.94912538834615,
+    "mean_jev_cost_usd": 0.000575995,
+    "max_tokens": 28763
+  },
+  "rows": [
+    {
+      "target": 32,
+      "tokens": 46,
+      "jev_s": 0.41136812209151685,
+      "openmed_s": 0.06841455202084035,
+      "jev_input_tokens": 413,
+      "jev_cost_usd": 1.7346000000000003e-05
+    },
+    {
+      "target": 64,
+      "tokens": 59,
+      "jev_s": 0.2912666799966246,
+      "openmed_s": 0.2295046040089801,
+      "jev_input_tokens": 426,
+      "jev_cost_usd": 1.7892e-05
+    },
+    {
+      "target": 128,
+      "tokens": 111,
+      "jev_s": 0.29192836803849787,
+      "openmed_s": 0.2301383150042966,
+      "jev_input_tokens": 478,
+      "jev_cost_usd": 2.0076000000000002e-05
+    },
+    {
+      "target": 256,
+      "tokens": 228,
+      "jev_s": 0.29150579997804016,
+      "openmed_s": 0.2867366150021553,
+      "jev_input_tokens": 595,
+      "jev_cost_usd": 2.4990000000000003e-05
+    },
+    {
+      "target": 512,
+      "tokens": 475,
+      "jev_s": 0.31147692597005516,
+      "openmed_s": 0.543081064010039,
+      "jev_input_tokens": 842,
+      "jev_cost_usd": 3.5364e-05
+    },
+    {
+      "target": 1024,
+      "tokens": 943,
+      "jev_s": 0.28141383500769734,
+      "openmed_s": 1.1459076940082014,
+      "jev_input_tokens": 1310,
+      "jev_cost_usd": 5.5020000000000005e-05
+    },
+    {
+      "target": 2048,
+      "tokens": 1892,
+      "jev_s": 0.2766939109424129,
+      "openmed_s": 2.3120535879861563,
+      "jev_input_tokens": 2259,
+      "jev_cost_usd": 9.487800000000001e-05
+    },
+    {
+      "target": 4096,
+      "tokens": 3803,
+      "jev_s": 0.3043323149904609,
+      "openmed_s": 7.457960993051529,
+      "jev_input_tokens": 4170,
+      "jev_cost_usd": 0.00017514
+    },
+    {
+      "target": 8192,
+      "tokens": 7599,
+      "jev_s": 0.3884278420591727,
+      "openmed_s": 16.884518759907223,
+      "jev_input_tokens": 7966,
+      "jev_cost_usd": 0.00033457200000000005
+    },
+    {
+      "target": 16384,
+      "tokens": 15204,
+      "jev_s": 0.4576326080132276,
+      "openmed_s": 37.74806104099844,
+      "jev_input_tokens": 15571,
+      "jev_cost_usd": 0.000653982
+    },
+    {
+      "target": 24576,
+      "tokens": 22822,
+      "jev_s": 0.5837633128976449,
+      "openmed_s": 126.66088515007868,
+      "jev_input_tokens": 23189,
+      "jev_cost_usd": 0.0009739380000000001
+    },
+    {
+      "target": 30976,
+      "tokens": 28763,
+      "jev_s": 0.8803816139698029,
+      "openmed_s": 96.63127279805485,
+      "jev_input_tokens": 29130,
+      "jev_cost_usd": 0.00122346
+    }
+  ]
+}

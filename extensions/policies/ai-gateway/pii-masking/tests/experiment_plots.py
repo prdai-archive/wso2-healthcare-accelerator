@@ -22,6 +22,7 @@ use at all.
 
 from __future__ import annotations
 
+import math
 import statistics
 from pathlib import Path
 from typing import Any
@@ -143,6 +144,66 @@ def plot_decision_matrices(summaries: dict[str, dict[str, Any]], path: Path) -> 
         ax.set_yticks([0, 1], ["Has PII", "No PII"])
         ax.set_title(MODE_LABELS[mode].replace("\n", " "))
     fig.suptitle("Did the gate decide correctly? (100 notes)")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def _latency_crossover(tokens: list[float], jev: list[float], openmed: list[float]) -> float | None:
+    for index in range(1, len(tokens)):
+        was_slower = openmed[index - 1] > jev[index - 1]
+        now_faster = openmed[index] > jev[index]
+        if was_slower or not now_faster:
+            continue
+        low, high = math.log(tokens[index - 1]), math.log(tokens[index])
+        before, after = openmed[index - 1] - jev[index - 1], openmed[index] - jev[index]
+        if before == after:
+            return tokens[index]
+        fraction = before / (before - after)
+        return math.exp(low + fraction * (high - low))
+    return None
+
+
+def plot_size_sweep(rows: list[dict[str, float]], path: Path) -> None:
+    tokens = [row["tokens"] for row in rows]
+    jev = [row["jev_s"] for row in rows]
+    openmed = [row["openmed_s"] for row in rows]
+    combined = [jev_s + openmed_s for jev_s, openmed_s in zip(jev, openmed)]
+    cost = [row["jev_cost_usd"] for row in rows]
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    axes[0].plot(tokens, openmed, "o-", color=OPENMED_COLOR, label="without Jev: OpenMed only")
+    axes[0].plot(tokens, combined, "s--", color="#8172b3", label="with Jev, has PII: Jev + OpenMed")
+    axes[0].plot(tokens, jev, "^-", color=JEV_COLOR, label="with Jev, no PII: Jev only")
+    axes[0].set_xscale("log")
+    axes[0].set_yscale("log")
+    crossover = _latency_crossover(tokens, jev, openmed)
+    if crossover:
+        axes[0].axvline(crossover, color="#999999", linestyle=":", linewidth=1)
+        axes[0].text(crossover * 1.1, axes[0].get_ylim()[1], f"crossover ~{crossover:.0f} tok", va="top", fontsize=9)
+    axes[0].set_xlabel("input tokens")
+    axes[0].set_ylabel("seconds per request (log)")
+    axes[0].set_title("Latency vs input size")
+    axes[0].legend(loc="upper left")
+
+    axes[1].plot(tokens, cost, "o-", color=JEV_COLOR)
+    window = [row for row in rows if row["tokens"] >= 1024]
+    mean_cost = statistics.mean(row["jev_cost_usd"] for row in window)
+    axes[1].axhline(mean_cost, color="#999999", linestyle=":")
+    axes[1].text(
+        tokens[0],
+        mean_cost,
+        f" mean over 1k-32k: ${mean_cost:.6f}",
+        va="bottom",
+        fontsize=9,
+        color="#666666",
+    )
+    axes[1].set_xlabel("input tokens")
+    axes[1].set_ylabel("Jev cost per request (USD)")
+    axes[1].set_title("Jev cost vs input size")
+
+    fig.suptitle("Jev vs OpenMed as the input grows to 32k tokens")
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
