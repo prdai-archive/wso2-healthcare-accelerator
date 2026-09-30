@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from experiment_plots import write_plots
 from jev_gate import (
     DEFAULT_ENCODING,
     DEFAULT_MASK_THRESHOLD,
@@ -202,57 +203,6 @@ def _summarize(outcomes: list[RecordOutcome]) -> dict[str, Any]:
     }
 
 
-def _plot_decisions(summaries: dict[str, dict[str, Any]], path: Path) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    labels = ["PII caught", "PII missed", "non-PII masked", "non-PII skipped"]
-    keys = ["pii_caught", "pii_missed", "non_pii_masked", "non_pii_skipped"]
-    width = 0.38
-    positions = range(len(labels))
-
-    fig, ax = plt.subplots(figsize=(9, 5))
-    for offset, mode in enumerate(MODES):
-        values = [summaries[mode][key] for key in keys]
-        shifted = [p + (offset - 0.5) * width for p in positions]
-        bars = ax.bar(shifted, values, width, label=mode)
-        ax.bar_label(bars, padding=2)
-    ax.set_xticks(list(positions))
-    ax.set_xticklabels(labels)
-    ax.set_ylabel("records")
-    ax.set_title("Mask decisions vs ground truth (100 synthetic clinical notes)")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-
-
-def _plot_cost(summaries: dict[str, dict[str, Any]], path: Path) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    panels = [
-        ("jev_input_tokens", "Jev input tokens"),
-        ("jev_output_tokens", "Jev output tokens"),
-        ("jev_cost_usd", "Jev cost (USD)"),
-        ("wall_latency_s", "Processing time (s)"),
-    ]
-    fig, axes = plt.subplots(1, len(panels), figsize=(16, 4.5))
-    for ax, (key, title) in zip(axes, panels):
-        values = [summaries[mode][key] for mode in MODES]
-        bars = ax.bar(list(MODES), values, color=["#4c72b0", "#dd8452"])
-        ax.bar_label(bars, padding=2, fmt="%.4g")
-        ax.set_title(title)
-    fig.suptitle("Cost, tokens and latency: with Jev vs without Jev")
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-
-
 def _warm_up(policy: Any, gate: JevGate, masking_enabled: bool) -> None:
     if not masking_enabled:
         return
@@ -277,7 +227,14 @@ def main() -> None:
     parser.add_argument("--token-budget", type=int, default=STATE_TOKEN_BUDGET)
     parser.add_argument("--encoding", default=DEFAULT_ENCODING)
     parser.add_argument("--no-plot", action="store_true")
+    parser.add_argument("--replot", action="store_true", help="only regenerate plots from results.json")
     args = parser.parse_args()
+
+    if args.replot:
+        result = json.loads((args.out_dir / "results.json").read_text(encoding="utf-8"))
+        write_plots(result["modes"], result["outcomes"], args.out_dir)
+        print(f"wrote plots to {args.out_dir}")
+        return
 
     records = _load_records(args.dataset)
     if args.limit:
@@ -334,8 +291,7 @@ def main() -> None:
         )
 
     if not args.no_plot:
-        _plot_decisions(summaries, args.out_dir / "mask_decisions.png")
-        _plot_cost(summaries, args.out_dir / "cost_tokens_latency.png")
+        write_plots(summaries, {mode: [asdict(o) for o in outcomes[mode]] for mode in MODES}, args.out_dir)
         print(f"wrote plots to {args.out_dir}")
 
 
