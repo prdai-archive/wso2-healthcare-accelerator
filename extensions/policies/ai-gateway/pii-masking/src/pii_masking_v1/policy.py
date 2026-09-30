@@ -40,12 +40,24 @@ from apip_sdk_core import (
 MODEL_NAME = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 ENABLED_PARAM = "enabled"
 ENABLED_ENV = "PII_MASKING_ENABLED"
+JEV_PARAM = "jev"
+JEV_MODEL = "jev-latest"
+JEV_QUESTION = (
+    "Does this text contain personally identifiable information about a specific "
+    "individual that must be masked before the text leaves the organisation?"
+)
+JEV_SKIP_THRESHOLD = 0.2
+JEV_STATE_TOKEN_BUDGET = 32_000
+JEV_INPUT_USD_PER_MTOK = 0.042
 SKIP_KEYS = {"model", "role", "tool_call_id"}
 TOOL_CALL_KEYS = {"id", "type"}
 TOOL_FUNCTION_KEYS = {"name"}
 
 _MODEL_LOADER: Any | None = None
 _MODEL_LOADER_LOCK = threading.Lock()
+_JEV_CLIENT: Any | None = None
+_JEV_LOCK = threading.Lock()
+_TOKEN_ENCODING: Any | None = None
 
 logger = logging.getLogger("pii-masking")
 logger.setLevel(logging.INFO)
@@ -81,6 +93,68 @@ def _resolve_enabled(params: dict[str, Any] | None) -> bool:
     return True
 
 
+def _resolve_jev(params: dict[str, Any] | None) -> bool:
+    if not params or JEV_PARAM not in params:
+        return False
+    return _coerce_bool(params[JEV_PARAM])
+
+
+def _jev_client() -> Any:
+    global _JEV_CLIENT
+    if _JEV_CLIENT is None:
+        with _JEV_LOCK:
+            if _JEV_CLIENT is None:
+                from typesafe_sdk import TypeSafeClient
+
+                _JEV_CLIENT = TypeSafeClient()
+    return _JEV_CLIENT
+
+
+def _count_tokens(text: str) -> int:
+    global _TOKEN_ENCODING
+    if _TOKEN_ENCODING is None:
+        import tiktoken
+
+        _TOKEN_ENCODING = tiktoken.get_encoding("cl100k_base")
+    return len(_TOKEN_ENCODING.encode(text))
+
+
+def _jev_pii_probability(state: str) -> tuple[float, int | None]:
+    from typesafe_sdk import Noul
+
+    response = _jev_client().system_one(
+        state=state,
+        model=JEV_MODEL,
+        questions={"pii": Noul(instructions=JEV_QUESTION)},
+    )
+    return float(response.answers["pii"].noul), response.usage.input_tokens
+
+
+def _jev_decision(state: str) -> dict[str, Any]:
+    if _count_tokens(state) > JEV_STATE_TOKEN_BUDGET:
+        return {"mask": True, "reason": "over_budget", "probability": None, "input_tokens": 0, "latency_s": 0.0}
+    started = time.perf_counter()
+    try:
+        probability, input_tokens = _jev_pii_probability(state)
+    except Exception:
+        # Fail closed: if Jev cannot answer, mask rather than forward unredacted.
+        logger.exception("Jev pre-check failed, masking instead")
+        return {
+            "mask": True,
+            "reason": "jev_error",
+            "probability": None,
+            "input_tokens": 0,
+            "latency_s": time.perf_counter() - started,
+        }
+    return {
+        "mask": probability > JEV_SKIP_THRESHOLD,
+        "reason": "jev",
+        "probability": probability,
+        "input_tokens": input_tokens or 0,
+        "latency_s": time.perf_counter() - started,
+    }
+
+
 def _extract_pii(text_blob: str) -> Any:
     from openmed.core.pii import _extract_pii_batch
 
@@ -103,8 +177,10 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
     response is passed through unchanged.
     """
 
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(self, enabled: bool = True, jev: bool = False) -> None:
         self._enabled = enabled
+        self._jev = jev
+        self.last_jev: dict[str, Any] | None = None
         self._mappings: dict[str, dict[str, str]] = {}
 
     def mode(self) -> ProcessingMode:
@@ -213,6 +289,12 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
             )
 
         logger.info("request %s: received %d-byte body", ctx.shared.request_id, len(ctx.body.content))
+        if self._jev:
+            decision = _jev_decision(json.dumps(payload))
+            self.last_jev = decision
+            if not decision["mask"]:
+                logger.info("request %s: Jev says no PII, forwarding body unchanged", ctx.shared.request_id)
+                return None
         mapping: dict[str, str] = {}
         try:
             redacted = self._redact_structure(payload, mapping)
@@ -267,7 +349,7 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
 
 
 def get_policy(metadata, params):
-    return PiiMaskingPolicy(enabled=_resolve_enabled(params))
+    return PiiMaskingPolicy(enabled=_resolve_enabled(params), jev=_resolve_jev(params))
 
 
 def _warm_up_model() -> None:

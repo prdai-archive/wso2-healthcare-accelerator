@@ -69,10 +69,15 @@ same way you would any gateway policy.
 
 ## Configuration
 
-The policy takes one optional parameter, `enabled` (default `true`). Set it to
-`false` to forward traffic through the policy unchanged; when it is absent the
-policy falls back to the `PII_MASKING_ENABLED` environment variable, then to
-`true`. See `policy-definition.yaml` for the parameter schema.
+The policy takes two optional parameters. `enabled` (default `true`) turns
+masking on or off; when `false` the policy forwards traffic through unchanged,
+and when absent it falls back to `PII_MASKING_ENABLED`, then `true`. `jev`
+(default `false`) asks Jev whether the payload contains PII before masking: a
+confident "no PII" answer skips the OpenMed run, while an over-budget or failed
+check still masks. See `policy-definition.yaml` for the parameter schema.
+
+With `jev` enabled the raw payload (including any PII) is sent to TypeSafe's API
+for the pre-check, and `TYPESAFE_API_KEY` must be set.
 
 ## Limitations
 
