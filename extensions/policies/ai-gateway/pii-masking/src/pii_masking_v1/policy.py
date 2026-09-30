@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 import uuid
@@ -38,8 +37,6 @@ from apip_sdk_core import (
 )
 
 MODEL_NAME = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-ENABLED_PARAM = "enabled"
-ENABLED_ENV = "PII_MASKING_ENABLED"
 JEV_PARAM = "jev"
 JEV_MODEL = "jev-latest"
 JEV_QUESTION = (
@@ -82,15 +79,6 @@ def _coerce_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
-
-
-def _resolve_enabled(params: dict[str, Any] | None) -> bool:
-    if params and ENABLED_PARAM in params:
-        return _coerce_bool(params[ENABLED_PARAM])
-    env = os.environ.get(ENABLED_ENV)
-    if env is not None:
-        return _coerce_bool(env)
-    return True
 
 
 def _resolve_jev(params: dict[str, Any] | None) -> bool:
@@ -177,8 +165,7 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
     response is passed through unchanged.
     """
 
-    def __init__(self, enabled: bool = True, jev: bool = False) -> None:
-        self._enabled = enabled
+    def __init__(self, jev: bool = False) -> None:
         self._jev = jev
         self.last_jev: dict[str, Any] | None = None
         self._mappings: dict[str, dict[str, str]] = {}
@@ -271,10 +258,6 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
         ctx: RequestContext,
         params: dict[str, Any],
     ) -> RequestAction:
-        if not self._enabled:
-            logger.info("request %s: masking disabled, forwarding body unchanged", ctx.shared.request_id)
-            return None
-
         if ctx.body is None or not ctx.body.present or ctx.body.content is None:
             return None
 
@@ -322,9 +305,6 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
         ctx: ResponseContext,
         params: dict[str, Any],
     ) -> ResponseAction:
-        if not self._enabled:
-            return None
-
         mapping = self._mappings.pop(ctx.shared.request_id, None)
         if not mapping or ctx.response_body is None or not ctx.response_body.present:
             return None
@@ -349,7 +329,7 @@ class PiiMaskingPolicy(RequestPolicy, ResponsePolicy):
 
 
 def get_policy(metadata, params):
-    return PiiMaskingPolicy(enabled=_resolve_enabled(params), jev=_resolve_jev(params))
+    return PiiMaskingPolicy(jev=_resolve_jev(params))
 
 
 def _warm_up_model() -> None:
