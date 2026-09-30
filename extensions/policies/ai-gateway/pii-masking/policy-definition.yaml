@@ -12,7 +12,15 @@ description: |
 parameters:
   type: object
   additionalProperties: false
-  properties: {}
+  properties:
+    jev:
+      type: boolean
+      default: false
+      description: |
+        Ask Jev whether the payload contains PII before masking. When false
+        (default) every request is masked. When true, a confident "no PII"
+        answer skips masking, saving the OpenMed run at the cost of one Jev
+        call; an over-budget or failed Jev check masks anyway.
 
 systemParameters:
   type: object
