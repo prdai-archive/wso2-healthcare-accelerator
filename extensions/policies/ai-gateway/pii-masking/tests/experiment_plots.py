@@ -22,6 +22,7 @@ use at all.
 
 from __future__ import annotations
 
+import statistics
 from pathlib import Path
 from typing import Any
 
@@ -38,60 +39,79 @@ ERROR_COLOR = "#f7c9c9"
 JEV_COLOR = "#4c72b0"
 OPENMED_COLOR = "#dd8452"
 COST_SCALE_NOTES = (1_000, 10_000, 1_000_000)
-NOTES = 100
 
 
-def _openmed_seconds(summary: dict[str, Any]) -> float:
-    return summary["mask_latency_s"] + summary["demask_latency_s"]
+def _request_latencies(outcomes: list[dict[str, Any]], masked: bool | None = None) -> list[float]:
+    return [
+        o["gate_latency_s"] + o["mask_latency_s"] + o["demask_latency_s"]
+        for o in outcomes
+        if masked is None or o["masked"] == masked
+    ]
 
 
-def plot_time_and_cost(summaries: dict[str, dict[str, Any]], path: Path) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    labels = [MODE_LABELS[mode] for mode in MODES]
+def _openmed_only(outcomes: list[dict[str, Any]]) -> list[float]:
+    return [o["mask_latency_s"] + o["demask_latency_s"] for o in outcomes if o["masked"]]
 
-    jev = [summaries[mode]["gate_latency_s"] for mode in MODES]
-    openmed = [_openmed_seconds(summaries[mode]) for mode in MODES]
-    axes[0].bar(labels, jev, color=JEV_COLOR, label="Jev gate (remote)")
+
+def _mean_ms(values: list[float]) -> float:
+    return statistics.mean(values) * 1000 if values else 0.0
+
+
+def _p95_ms(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))] * 1000
+
+
+def plot_time_and_cost(
+    summaries: dict[str, dict[str, Any]],
+    outcomes: dict[str, list[dict[str, Any]]],
+    path: Path,
+) -> None:
+    without = _request_latencies(outcomes["without_jev"])
+    skipped = _request_latencies(outcomes["with_jev"], masked=False)
+    masked = _request_latencies(outcomes["with_jev"], masked=True)
+    openmed_masked = _openmed_only(outcomes["with_jev"])
+
+    jev_only = _mean_ms(skipped)
+    jev_with_openmed = _mean_ms(masked) - _mean_ms(openmed_masked)
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+
+    labels = ["without Jev\n(all requests)", "with Jev\n(no PII: skip)", "with Jev\n(has PII: mask)"]
+    jev = [0.0, jev_only, jev_with_openmed]
+    openmed = [_mean_ms(without), 0.0, _mean_ms(openmed_masked)]
+    axes[0].bar(labels, jev, color=JEV_COLOR, label="Jev gate")
     axes[0].bar(labels, openmed, bottom=jev, color=OPENMED_COLOR, label="OpenMed mask + restore")
-    for index, mode in enumerate(MODES):
+    for index in range(3):
         total = jev[index] + openmed[index]
-        axes[0].text(index, total + 0.6, f"{total:.1f}s total", ha="center", fontsize=10)
-    axes[0].text(0, jev[0] + openmed[0] / 2, f"{openmed[0]:.1f}s", ha="center", color="white")
-    axes[0].text(1, jev[1] / 2, f"{jev[1]:.1f}s Jev", ha="center", color="white")
-    axes[0].text(1, jev[1] + openmed[1] / 2, f"{openmed[1]:.1f}s", ha="center", color="white")
-    axes[0].set_ylim(0, max(jev[index] + openmed[index] for index in range(2)) * 1.2)
-    axes[0].set_title("Time to process 100 notes")
-    axes[0].set_ylabel("seconds")
+        axes[0].text(index, total + 12, f"{total:.0f} ms", ha="center", fontsize=10)
+    tail = [_p95_ms(group) for group in (without, skipped, masked)]
+    for index, p95 in enumerate(tail):
+        axes[0].plot([index - 0.34, index + 0.34], [p95, p95], color="#222222", linewidth=1.5)
+    axes[0].plot([], [], color="#222222", linewidth=1.5, label="p95")
+    axes[0].set_ylim(0, max(tail) * 1.25)
+    axes[0].set_title("Time per request")
+    axes[0].set_ylabel("milliseconds")
     axes[0].legend()
 
-    per_note_openmed = summaries["without_jev"]["mask_latency_s"] / NOTES * 1000
-    per_note_jev = summaries["with_jev"]["gate_latency_s"] / summaries["with_jev"]["jev_calls"] * 1000
-    bars = axes[1].bar(
-        ["OpenMed mask\n(in-process)", "Jev gate\n(one remote call)"],
-        [per_note_openmed, per_note_jev],
-        color=[OPENMED_COLOR, JEV_COLOR],
-    )
-    axes[1].bar_label(bars, padding=2, fmt="%.0f ms")
-    axes[1].set_title("Time per note")
-    axes[1].set_ylabel("milliseconds")
-
-    cost = [summaries[mode]["jev_cost_usd"] for mode in MODES]
-    bars = axes[2].bar(labels, cost, color=[OPENMED_COLOR, JEV_COLOR])
-    axes[2].bar_label(bars, padding=2, fmt="$%.4f")
-    axes[2].set_title("Jev cost (OpenMed is self-hosted: $0)")
-    axes[2].set_ylabel("USD")
-    scale = summaries["with_jev"]["jev_cost_usd"] / NOTES
-    axes[2].text(
+    per_request = summaries["with_jev"]["jev_cost_usd"] / summaries["with_jev"]["records"]
+    bars = axes[1].bar(["without Jev", "with Jev"], [0.0, per_request], color=[OPENMED_COLOR, JEV_COLOR])
+    axes[1].bar_label(bars, padding=2, fmt="$%.6f")
+    axes[1].set_title("Jev cost per request (OpenMed is self-hosted: $0)")
+    axes[1].set_ylabel("USD")
+    axes[1].text(
         1,
-        cost[1] * 0.55,
-        "\n".join(f"${scale * count:,.2f} per {count:,} notes" for count in COST_SCALE_NOTES),
+        per_request * 0.5,
+        "\n".join(f"${per_request * count:,.2f} per {count:,} requests" for count in COST_SCALE_NOTES),
         ha="center",
         va="top",
         fontsize=9,
         color="#444444",
     )
 
-    fig.suptitle("Time and cost: with Jev vs without Jev")
+    fig.suptitle("Per-request time and cost: with Jev vs without Jev")
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -133,5 +153,5 @@ def write_plots(
     outcomes: dict[str, list[dict[str, Any]]],
     out_dir: Path,
 ) -> None:
-    plot_time_and_cost(summaries, out_dir / "time_and_cost.png")
+    plot_time_and_cost(summaries, outcomes, out_dir / "time_and_cost.png")
     plot_decision_matrices(summaries, out_dir / "decision_matrix.png")
